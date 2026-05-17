@@ -52,7 +52,7 @@ rag-agent-frontend/
 │   │   ├── Documents.tsx  # 文档管理
 │   │   ├── Users.tsx     # 用户管理
 │   │   ├── Cleaning.tsx  # 数据清洗
-│   │   └── Settings.tsx  # 设置页面
+│   │   └── Settings.tsx   # 设置页面
 │   ├── types.ts          # TypeScript 类型定义
 │   ├── store.ts          # Zustand 状态管理
 │   ├── App.tsx           # 主应用组件
@@ -130,5 +130,3 @@ docker-compose -f docker-compose.integrated.yml up -d --build
 - ✅ 引用或基于本项目的衍生项目也必须开源
 
 详情请参阅：[LICENSE](LICENSE) 文件
-
-Copyright (C) 2026 RAG Customer Service
