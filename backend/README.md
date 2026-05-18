@@ -112,8 +112,12 @@ backend/
 │   └── rerank.py
 ├── alert-service/        # 告警服务
 ├── channel-service/      # 渠道服务
-├── admin-service/        # 管理服务
-├── analytics-service/  # 分析服务
+├── admin-service/        # 管理服务 - 运营仪表盘、WebSocket实时更新
+│   ├── main.py
+│   ├── config.py
+│   ├── database.py
+│   └── models.py
+├── analytics-service/  # 分析服务 - 数据统计
 ├── common/             # 公共模块
 ├── tests/              # 测试文件
 ├── docs/               # 文档
@@ -172,7 +176,7 @@ uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
 **方式二：启动所有微服务
 ```bash
-# 启动 API Gateway (8080
+# 启动 API Gateway (8080)
 cd api-gateway && uvicorn main:app --port 8080 --reload &
 
 # 启动用户服务 (8001)
@@ -183,6 +187,9 @@ cd ../chat-service && uvicorn main:app --port 8002 --reload &
 
 # 启动知识库服务 (8003)
 cd ../knowledge-service && uvicorn main:app --port 8003 --reload &
+
+# 启动管理服务 (8006) - 运营仪表盘
+cd ../admin-service && uvicorn main:app --port 8006 --reload &
 ```
 
 #### 2. 验证后端服务
@@ -389,7 +396,7 @@ server {
 - [API规范](./docs/API_SPECIFICATION.md)
 - [架构文档](./docs/ARCHITECTURE_FINAL.md)
 - [部署指南](./docs/DEPLOYMENT_GUIDE.md)
-- [学习教程](./docs/LEARNING_GUIDE.md)
+- [学习教程](./learning/README.md)
 - [联合调试报告](./tests/api-joint-debug-report.md)
 - [安全检查报告](./tests/security-check-report.md)
 
