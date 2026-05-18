@@ -1,39 +1,60 @@
-# Dependencies
-node_modules
-pnpm-lock.yaml
-package-lock.json
-yarn.lock
-
-# Build
-dist
-build
-
-# Environment - 敏感配置不提交
+# Environment variables
 .env
 .env.local
-.env.production
-*.local
+.env.*.local
+*.env
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 
 # IDE
-.vscode
-.idea
+.idea/
+.vscode/
 *.swp
 *.swo
-
-# OS
+*~
 .DS_Store
-Thumbs.db
 
 # Logs
 *.log
-npm-debug.log*
+logs/
 
-# Cache
-.cache
-.parcel-cache
+# Docker
+.dockerignore
 
-# Backend
-backend-rag-customer-service
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.temp/
 
-# Environment template
+# Credentials and secrets
+*.pem
+*.key
+*.crt
+credentials.json
+secrets.json
+
+# Build outputs
+*.tsbuildinfo
+*.tsbuildinfo.prev
+vite-env.d.ts
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment backup
+.env.backup
 .env.example

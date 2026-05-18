@@ -1,132 +1,147 @@
-# RAG Agent 前端
+# RAG智能客服系统
 
-一个通用的 RAG (检索增强生成) Agent 前端应用，支持多用户、企业知识库管理和智能问答。
+## 项目简介
 
-## 功能特性
+RAG智能客服系统是一个基于检索增强生成（RAG）技术的智能客服解决方案，采用微服务架构，支持多租户管理。
 
-- 👥 **多用户系统**: 用户注册登录、企业管理
-- 📚 **企业知识库**: 为每个企业创建独立的知识库
-- 🤖 **智能聊天**: 与 AI 对话，支持 Markdown 渲染和来源引用
-- 📄 **文档管理**: 支持拖拽上传，多种文档格式
-- 🧹 **数据清洗**: 文档预处理和清洗功能
-- ⚙️ **灵活配置**: 可自定义 API 密钥、模型参数等
-- 💾 **本地存储**: 数据自动保存到浏览器本地存储
-- 🐳 **Docker 支持**: 一键部署
-- 🔗 **后端集成**: 与 RAG 智能客服后端完美协同
+## 技术栈
 
-## 快速开始
+### 前端
+- React 18 + TypeScript
+- Tailwind CSS
+- Zustand (状态管理)
+- Vite (构建工具)
+- Monorepo 架构
 
-### 使用 Docker (推荐)
-
-```bash
-# 方式一：仅前端
-docker-compose up -d --build
-
-# 方式二：前后端完整部署
-docker-compose -f docker-compose.integrated.yml up -d --build
-
-# 访问 http://localhost:3000
-```
-
-### 本地开发
-
-```bash
-# 安装依赖
-pnpm install
-
-# 启动开发服务器
-pnpm dev
-
-# 构建生产版本
-pnpm build
-```
+### 后端
+- Python 3.10+
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- Redis
+- ChromaDB (向量数据库)
 
 ## 项目结构
 
 ```
-rag-agent-frontend/
-├── src/
-│   ├── api/              # API 客户端（集成后端）
-│   ├── pages/            # 页面组件
-│   │   ├── Chat.tsx      # 聊天页面
-│   │   ├── Documents.tsx  # 文档管理
-│   │   ├── Users.tsx     # 用户管理
-│   │   ├── Cleaning.tsx  # 数据清洗
-│   │   └── Settings.tsx   # 设置页面
-│   ├── types.ts          # TypeScript 类型定义
-│   ├── store.ts          # Zustand 状态管理
-│   ├── App.tsx           # 主应用组件
-│   └── main.tsx          # 入口文件
-├── Dockerfile            # Docker 配置
-├── docker-compose.yml    # 独立前端部署
-├── docker-compose.integrated.yml  # 前后端完整部署
-└── nginx.conf           # Nginx 配置
+workspace/
+├── backend/              # 后端微服务
+│   ├── api-gateway/    # API网关
+│   ├── user-service/    # 用户服务
+│   ├── chat-service/    # 聊天服务
+│   ├── knowledge-service/  # 知识库服务
+│   ├── alert-service/   # 告警服务
+│   └── channel-service/ # 渠道服务
+├── frontend/            # 前端应用
+│   ├── apps/
+│   │   ├── consumer/   # 消费者端
+│   │   ├── enterprise/ # 企业端
+│   │   └── system-admin/ # 系统管理端
+│   └── packages/
+│       ├── ui/        # 共享UI组件
+│       └── store/     # 共享状态
+├── docs/               # 文档
+├── tests/              # 测试脚本
+└── docker-compose.yml  # Docker编排
 ```
 
-## 与后端集成
+## 快速开始
 
-本前端需要配合后端服务使用：
+### 环境要求
+- Node.js 18+
+- Python 3.10+
+- Docker & Docker Compose
+- PostgreSQL
+- Redis
 
-### 后端项目
-🔗 **https://github.com/BH3PHW/rag-customer-service**
-
-### 前后端部署
+### 启动服务
 
 ```bash
-# 1. 克隆后端项目
-git clone https://github.com/BH3PHW/rag-customer-service.git
-
-# 2. 配置环境变量
-cd rag-customer-service
+# 复制环境变量配置
 cp .env.example .env
-# 编辑 .env，添加阿里云百炼 API Key
-# QWEN_API_KEY=your_api_key_here
 
-# 3. 启动所有服务
-docker-compose -f docker-compose.integrated.yml up -d --build
+# 启动所有服务
+docker-compose up -d
 
-# 4. 访问应用
-# 前端: http://localhost:3000
-# API:  http://localhost:8000
+# 或手动启动后端
+cd backend
+pip install -r requirements.txt
+uvicorn api-gateway.main:app --reload
+
+# 启动前端
+cd frontend
+npm install
+npm run dev
 ```
 
-## 技术栈
+## 主要功能
 
-- **前端框架**: React 18 + TypeScript
-- **构建工具**: Vite
-- **样式**: Tailwind CSS
-- **状态管理**: Zustand
-- **图标**: Lucide React
-- **Markdown**: React Markdown
-- **HTTP 客户端**: Fetch API
+- 🤖 智能问答：基于RAG技术的AI对话
+- 📚 知识库管理：文档上传、检索
+- 🔒 安全防护：防提示词注入、敏感词过滤
+- 💬 多渠道接入：Web、微信公众号、钉钉等
+- 👥 多租户管理：企业级隔离
+- 📊 数据分析：对话统计、运营报表
 
-## 使用流程
+## API文档
 
-1. **访问前端**: 打开 http://localhost:3000
-2. **注册账号**: 进入 Profile 页面注册新账号
-3. **创建企业**: 注册后创建企业
-4. **上传文档**: 进入 Documents 页面，上传知识库文档
-5. **开始问答**: 进入 Chat 页面，开始 RAG 智能问答
+启动服务后访问：`http://localhost:8000/docs`
 
-## API 集成
+## 开发指南
 
-前端通过以下端点与后端通信：
+### 前端开发
+```bash
+cd frontend
+npm install
+npm run dev        # 开发模式
+npm run build      # 生产构建
+npm run lint       # 代码检查
+```
 
-- `POST /api/v1/auth/register` - 用户注册
-- `POST /api/v1/auth/login` - 用户登录
-- `POST /api/v1/enterprises` - 创建企业
-- `GET /api/v1/knowledge-bases` - 获取知识库列表
-- `POST /api/v1/knowledge-bases/{id}/documents` - 上传文档
-- `POST /api/v1/chat/sessions` - 创建会话
-- `POST /api/v1/chat/sessions/{id}/messages` - 发送消息
+### 后端开发
+```bash
+cd backend
+pip install -r requirements.txt
 
-## License
+# 启动各个服务
+uvicorn api-gateway.main:app --port 8000
+uvicorn user-service.main:app --port 8001
+uvicorn chat-service.main:app --port 8002
+```
 
-本项目采用 **GNU General Public License v3.0 (GPL-3.0)** 开源许可证。
+## 安全特性
 
-这意味着：
-- ✅ 您可以自由使用、修改和分发本软件
-- ✅ 修改后的版本必须以相同的 GPL-3.0 许可证开源
-- ✅ 引用或基于本项目的衍生项目也必须开源
+- ✅ 防提示词注入（Prompt Injection Defense）
+- ✅ SQL注入防护（SQLAlchemy ORM）
+- ✅ API限流（Redis）
+- ✅ CORS跨域保护
+- ✅ JWT认证
+- ✅ bcrypt密码加密
+- ✅ 敏感词检测
 
-详情请参阅：[LICENSE](LICENSE) 文件
+## 测试
+
+```bash
+# 运行前端测试
+cd frontend
+npm test
+
+# 运行后端测试
+cd backend/tests
+python3 debug_services.py all
+```
+
+## 文档
+
+- [产品经理视角文档](./docs/产品经理视角-项目整合说明文档.md)
+- [API规范文档](./tests/api-specification.md)
+- [部署指南](./docs/DEPLOYMENT_GUIDE.md)
+- [安全检查报告](./tests/security-check-report.md)
+
+## 许可证
+
+MIT License
+
+## 贡献
+
+欢迎提交Issue和Pull Request！

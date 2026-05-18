@@ -1,13 +1,219 @@
+# RAG 智能客服系统 - Docker Compose 配置
+# 用于启动后端微服务
+
 version: '3.8'
+
 services:
-  rag-frontend:
-    build: .
-    container_name: rag-agent-frontend
+  # 数据库服务
+  postgres:
+    image: postgres:15-alpine
+    container_name: rag-postgres
+    environment:
+      POSTGRES_DB: rag_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "8080:80"
-    restart: unless-stopped
+      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # ChromaDB 向量数据库
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: rag-chromadb
+    ports:
+      - "8007:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # API 网关
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: rag-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+      - CHROMA_URL=http://chromadb:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 用户服务
+  user-service:
+    build:
+      context: ./backend/user-service
+      dockerfile: Dockerfile
+    container_name: rag-user-service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=your-super-secret-key-change-this-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 聊天服务
+  chat-service:
+    build:
+      context: ./backend/chat-service
+      dockerfile: Dockerfile
+    container_name: rag-chat-service
+    ports:
+      - "8002:8002"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+      - CHROMA_URL=http://chromadb:8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - QWEN_API_KEY=${QWEN_API_KEY}
+    depends_on:
+      - redis
+      - postgres
+      - chromadb
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 知识库服务
+  knowledge-service:
+    build:
+      context: ./backend/knowledge-service
+      dockerfile: Dockerfile
+    container_name: rag-knowledge-service
+    ports:
+      - "8003:8003"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+      - CHROMA_URL=http://chromadb:8000
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      - redis
+      - postgres
+      - chromadb
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 渠道接入服务
+  channel-service:
+    build:
+      context: ./backend/channel-service
+      dockerfile: Dockerfile
+    container_name: rag-channel-service
+    ports:
+      - "8005:8005"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 告警服务
+  alert-service:
+    build:
+      context: ./backend/alert-service
+      dockerfile: Dockerfile
+    container_name: rag-alert-service
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 管理后台服务
+  admin-service:
+    build:
+      context: ./backend/admin-service
+      dockerfile: Dockerfile
+    container_name: rag-admin-service
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+networks:
+  rag_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  chroma_data:
+  upload_data:

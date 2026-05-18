@@ -1,0 +1,25 @@
+{
+  "name": "rag-customer-service-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:consumer\" \"npm run dev:enterprise\" \"npm run dev:system-admin\"",
+    "dev:consumer": "cd apps/consumer && npm run dev",
+    "dev:enterprise": "cd apps/enterprise && npm run dev",
+    "dev:system-admin": "cd apps/system-admin && npm run dev",
+    "build": "npm run build:ui && npm run build:apps",
+    "build:apps": "npm run build:consumer && npm run build:enterprise && npm run build:system-admin",
+    "build:ui": "cd packages/ui && npm run build",
+    "build:consumer": "cd apps/consumer && npm run build",
+    "build:enterprise": "cd apps/enterprise && npm run build",
+    "build:system-admin": "cd apps/system-admin && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

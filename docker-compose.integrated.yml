@@ -1,3 +1,6 @@
+# RAG 智能客服系统 - 完整集成配置
+# 同时启动后端微服务和前端应用
+
 version: '3.8'
 
 services:
@@ -56,8 +59,8 @@ services:
   # ============ 后端微服务 ============
   user-service:
     build:
-      context: ./backend-rag-customer-service
-      dockerfile: user-service/Dockerfile
+      context: ./backend/user-service
+      dockerfile: Dockerfile
     container_name: rag_user_service
     ports:
       - "8001:8001"
@@ -76,8 +79,8 @@ services:
 
   knowledge-service:
     build:
-      context: ./backend-rag-customer-service
-      dockerfile: knowledge-service/Dockerfile
+      context: ./backend/knowledge-service
+      dockerfile: Dockerfile
     container_name: rag_knowledge_service
     ports:
       - "8002:8002"
@@ -99,8 +102,8 @@ services:
 
   chat-service:
     build:
-      context: ./backend-rag-customer-service
-      dockerfile: chat-service/Dockerfile
+      context: ./backend/chat-service
+      dockerfile: Dockerfile
     container_name: rag_chat_service
     ports:
       - "8003:8003"
@@ -123,8 +126,8 @@ services:
 
   alert-service:
     build:
-      context: ./backend-rag-customer-service
-      dockerfile: alert-service/Dockerfile
+      context: ./backend/alert-service
+      dockerfile: Dockerfile
     container_name: rag_alert_service
     ports:
       - "8004:8004"
@@ -142,8 +145,8 @@ services:
 
   api-gateway:
     build:
-      context: ./backend-rag-customer-service
-      dockerfile: api-gateway/Dockerfile
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
     container_name: rag_api_gateway
     ports:
       - "8000:8000"
@@ -168,13 +171,46 @@ services:
     restart: unless-stopped
 
   # ============ 前端服务 ============
-  frontend:
+  # 用户端 Widget
+  frontend-consumer:
     build:
-      context: ./rag-agent-frontend
+      context: ./frontend/apps/consumer
       dockerfile: Dockerfile
-    container_name: rag_frontend
+    container_name: rag_frontend_consumer
     ports:
-      - "3000:80"
+      - "3003:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - api-gateway
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 企业管理控制台
+  frontend-enterprise:
+    build:
+      context: ./frontend/apps/enterprise
+      dockerfile: Dockerfile
+    container_name: rag_frontend_enterprise
+    ports:
+      - "3001:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - api-gateway
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 系统管理后台
+  frontend-system-admin:
+    build:
+      context: ./frontend/apps/system-admin
+      dockerfile: Dockerfile
+    container_name: rag_frontend_system_admin
+    ports:
+      - "3002:80"
     environment:
       - VITE_API_BASE_URL=http://localhost:8000
     depends_on:
