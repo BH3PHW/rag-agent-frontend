@@ -54,6 +54,7 @@ from .intent_router import get_intent_router, IntentType, IntentDecision
 from .sse_stream import SSEStreamer
 # 导入防提示词注入防御
 from .prompt_injection_defender import get_prompt_injection_defender
+from .feedback_service import get_feedback_service
 
 # 确保模型在 init_db 之前被导入
 from . import quality_models
@@ -580,29 +581,124 @@ async def stream_chat_message(
 @app.post("/api/v1/feedback")
 async def submit_feedback(
     message_id: UUID,
-    rating: int,
-    comment: str = None,
+    user_id: UUID,
+    rating: str,
+    reason: str = None,
     db: Session = Depends(get_db)
 ):
     """
-    提交反馈
+    提交反馈（点赞/点踩）
 
-    用户对AI回复进行评价，帮助优化服务质量
+    用户对AI回复进行评价，帮助优化服务质量，用于RLHF数据积累
 
     参数:
         message_id: 消息ID
-        rating: 评分（1-5）
-        comment: 评价内容（可选）
-    """
-    feedback = Feedback(
-        message_id=message_id,
-        rating=rating,
-        comment=comment
-    )
-    db.add(feedback)
-    db.commit()
+        user_id: 用户ID
+        rating: 评价类型（"thumbs_up" | "thumbs_down"）
+        reason: 点踩原因（点踩时可选填）
 
-    return {"message": "Feedback submitted"}
+    返回:
+        反馈创建结果
+    """
+    feedback_service = get_feedback_service()
+    
+    feedback = feedback_service.create_feedback(
+        message_id=message_id,
+        user_id=user_id,
+        rating=rating,
+        reason=reason,
+        db=db
+    )
+
+    return {
+        "message": "Feedback submitted",
+        "feedback_id": str(feedback.id),
+        "rating": feedback.rating,
+        "created_at": feedback.created_at.isoformat()
+    }
+
+
+@app.get("/api/v1/feedback/{message_id}")
+async def get_message_feedback(
+    message_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    获取消息的反馈
+
+    参数:
+        message_id: 消息ID
+
+    返回:
+        反馈信息
+    """
+    feedback_service = get_feedback_service()
+    feedback = feedback_service.get_feedback(message_id, db)
+
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+
+    return {
+        "feedback_id": str(feedback.id),
+        "message_id": str(feedback.message_id),
+        "user_id": str(feedback.user_id),
+        "rating": feedback.rating,
+        "reason": feedback.reason,
+        "created_at": feedback.created_at.isoformat()
+    }
+
+
+@app.get("/api/v1/feedback/stats")
+async def get_feedback_stats():
+    """
+    获取反馈统计信息
+
+    返回:
+        反馈统计数据，包括总数、点赞数、点踩数和好评率
+    """
+    feedback_service = get_feedback_service()
+    stats = feedback_service.get_feedback_stats()
+
+    return stats
+
+
+@app.get("/api/v1/feedback/negative")
+async def get_negative_feedback(limit: int = 50):
+    """
+    获取负面反馈列表
+
+    获取所有点踩反馈，用于分析和优化
+
+    参数:
+        limit: 返回数量限制（默认50）
+
+    返回:
+        负面反馈列表，包含消息内容和点踩原因
+    """
+    feedback_service = get_feedback_service()
+    negative_feedback = feedback_service.get_negative_feedback(limit=limit)
+
+    return negative_feedback
+
+
+@app.get("/api/v1/feedback/export")
+async def export_feedback_for_finetuning():
+    """
+    导出反馈数据用于微调
+
+    将负面反馈数据导出为RLHF格式，用于训练优化模型
+
+    返回:
+        RLHF格式的反馈数据列表
+    """
+    feedback_service = get_feedback_service()
+    data = feedback_service.export_feedback_for_finetuning()
+
+    return {
+        "count": len(data),
+        "data": data,
+        "format": "rlhf"
+    }
 
 
 # ==================== 生命周期管理 ====================

@@ -1,22 +1,29 @@
 """
 Alert Service - Alert and Human Intervention Management
+
+Enhanced features:
+- Emotion recognition for detecting user sentiment
+- Human takeover logic for escalating difficult conversations
+- Ticket system integration
 """
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
 from .config import settings
 from .database import get_db, init_db
 from .models import Alert
+from .emotion_recognizer import EmotionRecognizer
+from .human_takeover import get_human_takeover_service
 
 
 app = FastAPI(
     title="Alert Service",
-    description="Alert and Human Intervention Service",
-    version="1.0.0"
+    description="Alert and Human Intervention Service with emotion recognition",
+    version="2.0.0"
 )
 
 app.add_middleware(
@@ -28,10 +35,14 @@ app.add_middleware(
 )
 
 
+# Singleton instances
+emotion_recognizer = EmotionRecognizer()
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "service": "alert-service"}
+    return {"status": "healthy", "service": "alert-service", "version": "2.0.0"}
 
 
 @app.get("/api/v1/alerts")
@@ -39,6 +50,7 @@ async def list_alerts(
     enterprise_id: UUID,
     status: str = None,
     priority: str = None,
+    alert_type: str = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
@@ -50,6 +62,8 @@ async def list_alerts(
         query = query.filter(Alert.status == status)
     if priority:
         query = query.filter(Alert.priority == priority)
+    if alert_type:
+        query = query.filter(Alert.alert_type == alert_type)
     
     alerts = query.order_by(Alert.created_at.desc()).offset(skip).limit(limit).all()
     
@@ -163,7 +177,6 @@ async def get_alert_stats(
         "by_type": {}
     }
     
-    # Count by type
     for alert in alerts:
         alert_type = alert.alert_type
         if alert_type not in stats["by_type"]:
@@ -198,6 +211,189 @@ async def get_pending_alerts(
         }
         for a in alerts
     ]
+
+
+# ==================== Emotion Recognition API ====================
+
+@app.post("/api/v1/emotion/analyze")
+async def analyze_emotion(text: str):
+    """
+    Analyze emotion from text
+    
+    Args:
+        text: User input text to analyze
+    
+    Returns:
+        Emotion analysis results including dominant emotion, scores, and intensity
+    """
+    result = emotion_recognizer.analyze_emotion(text)
+    return result
+
+
+# ==================== Human Takeover API ====================
+
+@app.post("/api/v1/takeover/check")
+async def check_takeover_needed(
+    user_id: UUID,
+    session_id: UUID,
+    enterprise_id: UUID,
+    message: str,
+    conversation_history: List[Dict[str, str]] = None,
+    retrieval_score: float = None,
+    consecutive_failures: int = 0
+):
+    """
+    Check if human takeover is needed based on various signals
+    
+    Args:
+        user_id: User ID
+        session_id: Session ID
+        enterprise_id: Enterprise ID
+        message: Current user message
+        conversation_history: List of previous messages
+        retrieval_score: RAG retrieval confidence score (0-1)
+        consecutive_failures: Number of consecutive failed attempts
+    
+    Returns:
+        Decision on whether takeover is needed and reasons
+    """
+    takeover_service = get_human_takeover_service()
+    
+    result = takeover_service.check_takeover_needed(
+        user_id=user_id,
+        session_id=session_id,
+        message=message,
+        conversation_history=conversation_history or [],
+        enterprise_id=enterprise_id,
+        retrieval_score=retrieval_score,
+        consecutive_failures=consecutive_failures
+    )
+    
+    return result
+
+
+@app.post("/api/v1/takeover/create")
+async def create_takeover(
+    user_id: UUID,
+    session_id: UUID,
+    enterprise_id: UUID,
+    message_id: UUID = None,
+    content: str = None,
+    reasons: List[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a human takeover alert/ticket
+    
+    Args:
+        user_id: User ID
+        session_id: Session ID
+        enterprise_id: Enterprise ID
+        message_id: Message ID that triggered takeover
+        content: Content that triggered takeover
+        reasons: List of reasons for takeover
+    
+    Returns:
+        Created alert details
+    """
+    takeover_service = get_human_takeover_service()
+    
+    alert = takeover_service.create_takeover_alert(
+        user_id=user_id,
+        session_id=session_id,
+        enterprise_id=enterprise_id,
+        message_id=message_id,
+        content=content,
+        reasons=reasons,
+        db=db
+    )
+    
+    return {
+        "message": "Takeover alert created",
+        "alert_id": str(alert.id),
+        "status": alert.status,
+        "created_at": alert.created_at.isoformat()
+    }
+
+
+@app.put("/api/v1/takeover/{alert_id}/assign")
+async def assign_takeover(
+    alert_id: UUID,
+    agent_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    Assign takeover alert to a human agent
+    
+    Args:
+        alert_id: Alert ID
+        agent_id: Agent user ID to assign
+    
+    Returns:
+        Updated alert details
+    """
+    takeover_service = get_human_takeover_service()
+    
+    alert = takeover_service.assign_to_agent(alert_id, agent_id, db)
+    
+    return {
+        "message": "Alert assigned",
+        "alert_id": str(alert.id),
+        "assigned_to": str(alert.assigned_to),
+        "status": alert.status
+    }
+
+
+@app.post("/api/v1/alerts")
+async def create_alert(
+    user_id: UUID,
+    session_id: UUID,
+    enterprise_id: UUID,
+    alert_type: str,
+    content: str = None,
+    trigger_word: str = None,
+    message_id: UUID = None,
+    priority: str = "medium",
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new alert
+    
+    Args:
+        user_id: User ID
+        session_id: Session ID
+        enterprise_id: Enterprise ID
+        alert_type: Type of alert (SENSITIVE_CONTENT, HUMAN_TAKEOVER, etc.)
+        content: Content that triggered the alert
+        trigger_word: Specific word that triggered the alert
+        message_id: Message ID reference
+        priority: Alert priority (low, medium, high, urgent)
+    
+    Returns:
+        Created alert details
+    """
+    alert = Alert(
+        user_id=user_id,
+        session_id=session_id,
+        enterprise_id=enterprise_id,
+        alert_type=alert_type,
+        content=content,
+        trigger_word=trigger_word,
+        message_id=message_id,
+        priority=priority,
+        status="pending"
+    )
+    
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    
+    return {
+        "message": "Alert created",
+        "alert_id": str(alert.id),
+        "status": alert.status,
+        "created_at": alert.created_at.isoformat()
+    }
 
 
 @app.on_event("startup")
