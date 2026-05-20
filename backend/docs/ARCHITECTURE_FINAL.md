@@ -1,124 +1,137 @@
 # RAG 智能客服系统 - 完整架构文档
 
-## 🎉 项目重构完成！
-
-已完成完全的项目重构，实现了三个完全独立的子项目！
+## 📋 目录
+1. [架构总览](#1-架构总览)
+2. [后端微服务架构](#2-后端微服务架构)
+3. [前端应用架构](#3-前端应用架构)
+4. [数据流程](#4-数据流程)
 
 ---
 
-## 📦 架构总览
+## 1. 架构总览
+
+### 系统组成
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                             项目根目录                               │
+│                          RAG 智能客服系统                              │
 ├─────────────────────────────────────────────────────────────────────┤
-│  backend/                    ← 后端服务（完全独立）                  │
-│    └── admin-console-api/   ← 管理后端 API                          │
 │                                                                      │
-│  frontend-user/              ← 用户端 Widget（完全独立）             │
-│    ├── src/                                                          │
-│    └── public/                                                       │
+│  ┌──────────────────┐    ┌──────────────────────────────────────┐  │
+│  │   前端应用层     │    │           后端服务层                  │  │
+│  │                  │    │                                      │  │
+│  │ 🧑‍💼 consumer      │───▶│  ┌─────────────────────────────┐    │  │
+│  │    (3001)        │    │  │   API Gateway (8080)        │    │  │
+│  │                  │    │  └─────────────────────────────┘    │  │
+│  │ 🏢 enterprise    │    │            │                         │  │
+│  │    (3002)        │───▶│  ┌─────────────────────────────┐    │  │
+│  │                  │    │  │   微服务集群                 │    │  │
+│  │ 🎧 agent-portal  │    │  │                             │    │  │
+│  │    (3004)        │───▶│  │ - User Service (8001)       │    │  │
+│  │                  │    │  │ - Chat Service (8002)       │    │  │
+│  │ 🔧 system-admin  │    │  │ - Knowledge Service (8003)  │    │  │
+│  │    (3003)        │───▶│  │ - Alert Service (8004)      │    │  │
+│  │                  │    │  │ - Channel Service (8005)    │    │  │
+│  └──────────────────┘    │  │ - Admin Service (8006)      │    │  │
+│                          │  │ - Analytics Service (8007)  │    │  │
+│                          │  └─────────────────────────────┘    │  │
+│                          └──────────────────────────────────────┘  │
 │                                                                      │
-│  frontend-admin/             ← 管理端控制台（完全独立）              │
-│    └── public/                                                       │
-│                                                                      │
+│  ┌───────────────────────────────────────────────────────────────┐ │
+│  │                      数据存储层                                  │ │
+│  │  - PostgreSQL (关系型数据库)                                  │ │
+│  │  - Redis (缓存/会话存储)                                       │ │
+│  │  - ChromaDB (向量数据库)                                       │ │
+│  └───────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📁 三个完全独立的子项目
+## 2. 后端微服务架构
 
-### 1️⃣ **后端 (backend/)**
-- **技术栈**：Python 3.10+、FastAPI、Uvicorn
-- **完全独立**：可以单独部署
-- **无前端代码**：只提供 REST API
-- **端口**：8080
-- **API 文档**：http://localhost:8080/docs
+### 服务列表与职责
 
-### 2️⃣ **用户端 Widget (frontend-user/)**
-- **技术栈**：原生 JavaScript（无任何依赖）、HTML5、CSS3
-- **完全独立**：可以嵌入任何网站
-- **零依赖**：无需任何构建工具或第三方库
-- **特点**：支持 SSE 流式输出、打字机效果
-- **端口**：3000
+| 服务 | 端口 | 职责 |
+|------|------|------|
+| API Gateway | 8080 | 统一入口、请求路由、认证验证 |
+| User Service | 8001 | 用户管理、企业管理、认证 |
+| Chat Service | 8002 | 智能对话、RAG检索、流式输出 |
+| Knowledge Service | 8003 | 知识库管理、文档向量化、FAQ |
+| Alert Service | 8004 | 告警检测、告警通知 |
+| Channel Service | 8005 | 多渠道接入、电商平台对接 |
+| Admin Service | 8006 | 系统管理、**客服坐席服务**、WebSocket |
+| Analytics Service | 8007 | 数据统计、分析报表 |
 
-### 3️⃣ **管理端控制台 (frontend-admin/)**
-- **技术栈**：原生 JavaScript（无任何依赖）、HTML5、CSS3
-- **完全独立**：可以独立部署到 CDN
-- **零依赖**：无需任何构建工具
-- **特点**：知识库管理、渠道接入、对话监控、FAQ 管理
-- **端口**：8080
+### 核心新增：客服坐席服务
 
----
+**Admin Service (8006)** 扩展了坐席功能：
+- 坐席登录认证 (OAuth2)
+- 等待会话管理
+- 会话接入与转接
+- WebSocket实时通知
+- 坐席状态监控
+- 会话优先级处理
 
-## 🎯 技术栈一致性
-
-### 后端技术栈（统一）
-- FastAPI 框架
-- Pydantic 数据验证
-- Uvicorn 服务器
-- 标准 REST API 规范
-
-### 前端技术栈（统一）
-- 原生 JavaScript（ES6+）
-- HTML5、CSS3
-- 零第三方依赖
-- 通过 REST API 与后端通信
+**核心模型：**
+- `Agent`: 坐席账户、状态、并发数
+- `AgentSession`: 坐席会话记录
 
 ---
 
-## 🚀 快速启动指南
+## 3. 前端应用架构
 
-### 启动后端
-```bash
-cd backend/admin-console-api
-pip install -r requirements.txt
-python main.py
+### 应用列表
+
+| 应用 | 端口 | 技术栈 | 用户角色 |
+|------|------|--------|---------|
+| Consumer | 3001 | React + TS + Vite | 终端消费者 |
+| Enterprise | 3002 | React + TS + Vite | 企业管理员 |
+| **Agent Portal** | 3004 | React + TS + Vite | **客服坐席** |
+| System Admin Portal | 3003 | React + TS + Vite | 系统管理员 |
+
+### 客服坐席门户 (Agent Portal)
+
+**主要页面：**
+- `Login.tsx`: 坐席登录
+- `Dashboard.tsx`: 坐席仪表盘
+- `WaitingChats.tsx`: 等待接入会话
+- `MyChats.tsx`: 我的会话
+- `ChatDetail.tsx`: 会话详情
+
+**核心功能：**
+- OAuth2认证
+- WebSocket实时通信
+- Zustand状态管理
+- 会话优先级显示
+
+---
+
+## 4. 数据流程
+
+### 客服坐席工作流程
+
+```
+1. 用户请求转接人工
+   ↓
+2. 创建等待会话 (POST /api/v1/waiting-sessions)
+   ↓
+3. 通过WebSocket通知所有在线坐席
+   ↓
+4. 坐席查看等待列表
+   ↓
+5. 坐席接入会话 (POST /api/v1/agent/chats/{id}/accept)
+   ↓
+6. 开始实时对话 (WebSocket)
+   ↓
+7. 会话结束 (POST /api/v1/agent/chats/{id}/close)
 ```
 
-### 启动用户端 Widget
-```bash
-cd frontend-user
-python3 -m http.server 3000 --directory public
-```
-访问：http://localhost:3000
-
-### 启动管理端控制台
-```bash
-cd frontend-admin
-python3 -m http.server 8081 --directory public
-```
-访问：http://localhost:8081
-
 ---
 
-## 🔗 通信方式
+## 📚 相关文档
 
-所有模块之间通过标准 REST API 通信：
-- 前端 ↔ 后端：JSON 格式
-- 完全无耦合
-- 可独立扩展和替换
-
----
-
-## ✨ 重构成果
-
-| 检查项 | 状态 |
-|-------|------|
-| 后端完全独立 | ✅ |
-| 用户前端完全独立 | ✅ |
-| 管理前端完全独立 | ✅ |
-| 技术栈一致 | ✅ |
-| 无依赖混用 | ✅ |
-| 模块间完全解耦 | ✅ |
-| 零第三方依赖（前端） | ✅ |
-
----
-
-## 📖 详细文档
-
-每个项目都有独立的 README.md 文档：
-- [backend/README.md](backend/README.md)
-- [frontend-user/README.md](frontend-user/README.md)
-- [frontend-admin/README.md](frontend-admin/README.md)
+- [API规范文档](./API_SPECIFICATION.md)
+- [部署与调试指南](./DEPLOYMENT_AND_DEBUGGING.md)
+- [安全指南](./SECURITY_GUIDE.md)
+- [学习教程](../learning/README.md)

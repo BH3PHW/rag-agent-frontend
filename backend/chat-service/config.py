@@ -1,76 +1,48 @@
 """
 Chat Service Configuration
+使用 common 模块的通用配置
 """
 import os
-from typing import Optional
-from pydantic_settings import BaseSettings
+import sys
+from pathlib import Path
 from functools import lru_cache
 
+# 添加backend根目录到Python路径
+backend_root = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_root))
 
-class Settings(BaseSettings):
-    """Chat Service settings"""
+try:
+    from common.config import CommonSettings
+except ImportError:
+    try:
+        import sys
+        from pathlib import Path
+        # 尝试添加 backend 目录到路径
+        backend_root = Path(__file__).parent.parent
+        sys.path.insert(0, str(backend_root))
+        from common.config import CommonSettings
+    except ImportError:
+        from pydantic_settings import BaseSettings
+        CommonSettings = BaseSettings
+
+
+class Settings(CommonSettings):
+    """Chat Service settings - 继承通用配置"""
     
-    # Application
     APP_NAME: str = "Chat Service"
-    APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
     
-    # Database
+    # 使用环境变量前缀以支持多服务隔离
     DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", 
-        "postgresql://postgres:postgres@localhost:5432/rag_service"
+        "CHAT_DATABASE_URL",
+        os.getenv("DATABASE_URL", "sqlite:////tmp/chat_service.db")
     )
-    DB_POOL_SIZE: int = 10
-    DB_MAX_OVERFLOW: int = 20
     
-    # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD")
+    REDIS_URL: str = os.getenv("CHAT_REDIS_URL", "redis://localhost:6379/0")
     
-    # ChromaDB
-    CHROMA_HOST: str = os.getenv("CHROMA_HOST", "localhost")
-    CHROMA_PORT: int = int(os.getenv("CHROMA_PORT", "8000"))
-    
-    # Qwen API
-    QWEN_API_KEY: str = os.getenv("QWEN_API_KEY", "")
-    QWEN_API_ENDPOINT: str = os.getenv(
-        "QWEN_API_ENDPOINT", 
-        "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
-    )
-    QWEN_MODEL: str = os.getenv("QWEN_MODEL", "qwen-turbo")
-    QWEN_TEMPERATURE: float = 0.7
-    QWEN_MAX_TOKENS: int = 2000
-    
-    # RAG Settings
-    TOP_K: int = 5
-    SIMILARITY_THRESHOLD: float = 0.7
-    
-    # Rerank Settings
-    RERANK_ENABLED: bool = os.getenv("RERANK_ENABLED", "true").lower() == "true"
-    RERANK_USE_CROSS_ENCODER: bool = os.getenv("RERANK_USE_CROSS_ENCODER", "true").lower() == "true"
-    
-    # Sensitive Words
-    SENSITIVE_KEYWORDS: list = [
-        "投诉", "举报", "诈骗", "欺诈", "违法", "犯罪",
-        "退款", "退货", "赔偿", "律师", "法院", "警察",
-        "上访", "自杀", "暴力", "恐怖", "色情", "赌博",
-        "毒品", "武器", "机密", "泄密", "不满", "愤怒",
-        "控诉", "起诉", "投诉", "很差", "失望", "坑人"
-    ]
-    
-    # Alert Settings
-    ALERT_ENABLED: bool = True
-    HUMAN_THRESHOLD: int = 3
+    SECRET_KEY: str = os.getenv("CHAT_SECRET_KEY", os.getenv("SECRET_KEY", "chat-service-secret-key"))
     
     # Knowledge Service API
-    KNOWLEDGE_SERVICE_URL: str = os.getenv("KNOWLEDGE_SERVICE_URL", "http://knowledge-service:8002")
-    
-    # CORS
-    CORS_ORIGINS: list = ["*"]
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    KNOWLEDGE_SERVICE_URL: str = os.getenv("KNOWLEDGE_SERVICE_URL", "http://knowledge-service:8003")
 
 
 @lru_cache()

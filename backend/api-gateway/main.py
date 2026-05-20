@@ -19,21 +19,37 @@ API Gateway - RAG智能客服系统的统一入口
 # 导入FastAPI核心框架和中间件
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Optional
 
 # 导入HTTP客户端，用于转发请求到后端微服务
 import httpx
 import time
 import logging
+import sys
+from pathlib import Path
+
+# 添加backend根目录到Python路径
+backend_root = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_root))
 
 # 导入本项目的配置、安全认证和Redis客户端
-from .config import settings
-from .security import (
-    verify_token,
-    validate_enterprise_access
-)
-from .redis_client import redis_manager
+try:
+    from .config import settings
+    from .security import (
+        verify_token,
+        validate_enterprise_access
+    )
+except ImportError:
+    from config import settings
+    from security import (
+        verify_token,
+        validate_enterprise_access
+    )
+try:
+    from .redis_client import redis_manager
+except ImportError:
+    from redis_client import redis_manager
 
 # 配置日志记录器，记录API Gateway的运行状态
 logging.basicConfig(level=logging.INFO)
@@ -686,10 +702,20 @@ async def create_chat_session(data: dict, request: Request):
 
     logger.info(f"Creating chat session for user {data.get('user_id')} in enterprise {enterprise_id}")
 
+    # 提取参数作为查询参数传递
+    params = {}
+    if data.get("user_id"):
+        params["user_id"] = str(data.get("user_id"))
+    if data.get("enterprise_id"):
+        params["enterprise_id"] = str(data.get("enterprise_id"))
+    if data.get("title"):
+        params["title"] = data.get("title")
+
     return await proxy_request(
         "chat",
         "/api/v1/chat/sessions",
         "POST",
+        params=params,
         json_data=data,
         headers=get_request_headers(request)
     )
@@ -738,12 +764,19 @@ async def send_message(
 
     logger.info(f"User {user_id} sending message to session {session_id}")
 
+    # 构建查询参数
+    params = {}
+    if user_id:
+        params["user_id"] = str(user_id)
+    if enterprise_id:
+        params["enterprise_id"] = str(enterprise_id)
+    params["content"] = content
+
     return await proxy_request(
         "chat",
         f"/api/v1/chat/sessions/{session_id}/messages",
         "POST",
-        json_data={"content": content, "enterprise_id": enterprise_id},
-        params={"user_id": user_id},
+        params=params,
         headers=get_request_headers(request)
     )
 

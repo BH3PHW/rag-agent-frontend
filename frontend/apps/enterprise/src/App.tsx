@@ -32,18 +32,20 @@ import {
   FileText,       // 文档管理图标
   HelpCircle,     // FAQ管理图标
   ShieldAlert,    // 敏感词设置图标
-  FileSearch      // 数据清洗图标
+  FileSearch,     // 数据清洗图标
+  ShoppingCart    // 电商平台图标
 } from 'lucide-react';
 
 // 导入各页面组件
-import KnowledgeBase from './pages/KnowledgeBase';    // 知识库页面
-import ChatMonitor from './pages/ChatMonitor';       // 对话监控页面
-import HumanAgent from './pages/HumanAgent';         // 人工坐席页面
-import Channels from './pages/Channels';             // 渠道接入页面
-import SettingsPage from './pages/Settings';        // 系统设置页面
-import Documents from './pages/Documents';          // 文档管理页面
-import Cleaning from './pages/Cleaning';             // 数据清洗页面
+import KnowledgeBase from './pages/KnowledgeBase';       // 知识库页面
+import ChatMonitor from './pages/ChatMonitor';          // 对话监控页面
+import HumanAgent from './pages/HumanAgent';            // 人工坐席页面
+import Channels from './pages/Channels';                // 渠道接入页面
+import SettingsPage from './pages/Settings';           // 系统设置页面
+import Documents from './pages/Documents';             // 文档管理页面
+import Cleaning from './pages/Cleaning';                // 数据清洗页面
 import SensitiveSettings from './pages/SensitiveSettings'; // 敏感词设置页面
+import EcommercePlatforms from './pages/EcommercePlatforms'; // 电商平台对接页面
 
 /**
  * 页面类型定义
@@ -57,6 +59,7 @@ type ActivePage =
   | 'chat'           // 对话监控
   | 'human'          // 人工坐席
   | 'channels'       // 渠道接入
+  | 'ecommerce'      // 电商平台
   | 'faq'            // FAQ管理
   | 'settings';      // 系统设置
 
@@ -90,6 +93,7 @@ export default function App() {
     { id: 'chat', label: '对话监控', icon: MessageSquare, badge: '3' }, // 对话监控（3条未读）
     { id: 'human', label: '人工坐席', icon: Users },                  // 人工客服
     { id: 'channels', label: '渠道接入', icon: Link2 },              // 多渠道接入
+    { id: 'ecommerce', label: '电商平台', icon: ShoppingCart },      // 电商平台对接
     { id: 'faq', label: 'FAQ管理', icon: HelpCircle },                // 常见问题
     { id: 'settings', label: '系统设置', icon: Settings },           // 系统配置
   ];
@@ -114,6 +118,8 @@ export default function App() {
         return <HumanAgent />;           // 人工坐席
       case 'channels':
         return <Channels />;             // 渠道接入
+      case 'ecommerce':
+        return <EcommercePlatforms />;  // 电商平台对接
       case 'settings':
         return <SettingsPage />;        // 系统设置
       default:

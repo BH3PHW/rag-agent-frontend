@@ -28,37 +28,102 @@ from uuid import UUID
 from datetime import datetime
 import json
 
-# 导入本服务配置
-from .config import settings
-# 导入数据库连接和初始化
-from .database import get_db, init_db
-# 导入Redis客户端，用于缓存和发布订阅
-from .redis_client import redis_manager
-# 导入数据模型
-from .models import ChatSession, ChatMessage
-# 导入质量评估模型
-from .quality_models import Feedback, UnmatchedQuestion
-# 导入FAQ模型
-from .faq_models import FAQ
-# 导入RAG引擎
-from .rag import get_rag_engine
-# 导入敏感内容检测
-from .sensitive import detect_sensitive_content
-# 导入语义分析
-from .semantic import analyze_sensitive_meaning
-# 导入LLM客户端
-from .llm import get_qwen_client
-# 导入意图路由器
-from .intent_router import get_intent_router, IntentType, IntentDecision
-# 导入SSE流式输出器
-from .sse_stream import SSEStreamer
-# 导入防提示词注入防御
-from .prompt_injection_defender import get_prompt_injection_defender
-from .feedback_service import get_feedback_service
+try:
+    # 导入本服务配置
+    from .config import settings
+    # 导入数据库连接和初始化
+    from .database import get_db, init_db
+    # 导入Redis客户端，用于缓存和发布订阅
+    from .redis_client import redis_manager
+    # 导入数据模型
+    from .models import ChatSession, ChatMessage
+    # 导入质量评估模型
+    from .quality_models import Feedback, UnmatchedQuestion
+    # 导入FAQ模型
+    from .faq_models import FAQ
+    # 导入CRUD操作
+    from . import crud
+    # 导入RAG引擎
+    from .rag import get_rag_engine
+    # 导入敏感内容检测
+    from .sensitive import detect_sensitive_content
+    # 导入语义分析
+    from .semantic import analyze_sensitive_meaning
+    # 导入LLM客户端
+    from .llm import get_qwen_client
+    # 导入意图路由器
+    from .intent_router import get_intent_router, IntentType, IntentDecision
+    # 导入SSE流式输出器
+    from .sse_stream import SSEStreamer
+    # 导入防提示词注入防御
+    from .prompt_injection_defender import get_prompt_injection_defender
+    from .feedback_service import get_feedback_service
+    # 导入Agent系统和工具
+    from .agent_system import get_agent_executor
+    # 导入安全验证
+    from .security import get_security_service
+    from .built_in_tools import set_current_security_context
+    from .jwt_auth import get_jwt_service
+    from .rate_limit import get_rate_limit_manager
+    from .audit_logger import get_audit_logger, AuditAction, AuditSeverity
+    from .api_security import (
+        require_auth,
+        require_permission,
+        rate_limit,
+        audit_log,
+        Validators,
+        add_security_headers
+    )
+    from .ecommerce_config_service import EcommerceConfigService
+    # 确保模型在 init_db 之前被导入
+    from . import quality_models
+    from . import faq_models
+    from . import ecommerce_config_models
+except ImportError:
+    # 直接运行时使用绝对导入
+    from config import settings
+    from database import get_db, init_db
+    from redis_client import redis_manager
+    from models import ChatSession, ChatMessage
+    from quality_models import Feedback, UnmatchedQuestion
+    from faq_models import FAQ
+    import crud
+    from rag import get_rag_engine
+    from sensitive import detect_sensitive_content
+    from semantic import analyze_sensitive_meaning
+    from llm import get_qwen_client
+    from intent_router import get_intent_router, IntentType, IntentDecision
+    from sse_stream import SSEStreamer
+    from prompt_injection_defender import get_prompt_injection_defender
+    from feedback_service import get_feedback_service
+    from agent_system import get_agent_executor
+    from security import get_security_service
+    from built_in_tools import set_current_security_context
+    from jwt_auth import get_jwt_service
+    from rate_limit import get_rate_limit_manager
+    from audit_logger import get_audit_logger, AuditAction, AuditSeverity
+    from api_security import (
+        require_auth,
+        require_permission,
+        rate_limit,
+        audit_log,
+        Validators,
+        add_security_headers
+    )
+    from ecommerce_config_service import EcommerceConfigService
+    # 确保模型在 init_db 之前被导入
+    import quality_models
+    import faq_models
+    import ecommerce_config_models
+from pydantic import BaseModel
+
+class AddPlatformRequest(BaseModel):
+    config_schema: Optional[dict] = None
 
 # 确保模型在 init_db 之前被导入
 from . import quality_models
 from . import faq_models
+from . import ecommerce_config_models
 
 # 创建FastAPI应用实例
 app = FastAPI(
@@ -127,8 +192,8 @@ async def security_check(content: str) -> dict:
 # ==================== 辅助函数 ====================
 
 async def log_unmatched_question_background(
-    session_id: UUID,
-    user_id: UUID,
+    session_id: str,
+    user_id: str,
     question: str,
     retrieval_score: float
 ):
@@ -160,7 +225,7 @@ async def log_unmatched_question_background(
 
 
 async def create_alert_background(
-    enterprise_id: UUID,
+    enterprise_id: str,
     alert_type: str,
     content: str,
     metadata: dict = None
@@ -199,8 +264,8 @@ async def create_alert_background(
 
 @app.post("/api/v1/chat/sessions")
 async def create_chat_session(
-    user_id: UUID,
-    enterprise_id: UUID,
+    user_id: str,
+    enterprise_id: str,
     title: str = None,
     db: Session = Depends(get_db)
 ):
@@ -236,8 +301,8 @@ async def create_chat_session(
 
 @app.get("/api/v1/chat/sessions")
 async def list_chat_sessions(
-    user_id: UUID,
-    enterprise_id: UUID,
+    user_id: str,
+    enterprise_id: str,
     skip: int = 0,
     limit: int = 20,
     db: Session = Depends(get_db)
@@ -268,7 +333,7 @@ async def list_chat_sessions(
 
 @app.get("/api/v1/chat/sessions/{session_id}")
 async def get_chat_session(
-    session_id: UUID,
+    session_id: str,
     db: Session = Depends(get_db)
 ):
     """
@@ -288,7 +353,7 @@ async def get_chat_session(
 
 @app.delete("/api/v1/chat/sessions/{session_id}")
 async def delete_chat_session(
-    session_id: UUID,
+    session_id: str,
     db: Session = Depends(get_db)
 ):
     """
@@ -318,10 +383,10 @@ async def delete_chat_session(
 
 @app.post("/api/v1/chat/sessions/{session_id}/messages")
 async def send_message(
-    session_id: UUID,
+    session_id: str,
     content: str,
-    user_id: UUID = None,
-    enterprise_id: UUID = None,
+    user_id: str = None,
+    enterprise_id: str = None,
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
@@ -374,7 +439,10 @@ async def send_message(
 
     db.commit()
 
-    # 构建流式响应生成器
+    # 预先获取历史消息 - 在流式响应生成器外部完成，减少耦合
+    recent_messages = crud.get_recent_messages(db, session_id, 10)
+
+    # 构建流式响应生成器 - 不需要直接访问数据库
     async def generate_response():
         streamer = SSEStreamer()
 
@@ -407,7 +475,7 @@ async def send_message(
             retrieval_result = await rag_engine.retrieve(content, enterprise_id)
 
             # 如果检索得分很低，记录这个问题
-            if retrieval_result["score"] < 0.3:
+            if retrieval_result["score"] < 0.3 and background_tasks:
                 background_tasks.add_task(
                     log_unmatched_question_background,
                     session_id, user_id, content, retrieval_result["score"]
@@ -419,7 +487,7 @@ async def send_message(
             async for chunk in qwen_client.stream_chat(
                 content=content,
                 context=retrieval_result["context"],
-                history=self.get_recent_messages(session_id, db)
+                history=recent_messages
             ):
                 yield streamer.event("chunk", {"content": chunk})
 
@@ -444,8 +512,8 @@ async def send_message(
 
 @app.get("/api/v1/chat/sessions/{session_id}/messages")
 async def get_messages(
-    session_id: UUID,
-    user_id: UUID = None,
+    session_id: str,
+    user_id: str = None,
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db)
@@ -478,7 +546,7 @@ async def get_messages(
 @app.post("/api/v1/chat/stream")
 async def stream_chat_message(
     message: str,
-    enterprise_id: UUID = None,
+    enterprise_id: str = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -576,12 +644,276 @@ async def stream_chat_message(
     )
 
 
+# ==================== 工具调用API ====================
+
+@app.post("/api/v1/chat/tools")
+async def chat_with_tools(
+    message: str,
+    enterprise_id: str = None,
+    user_id: str = None,
+    db: Session = Depends(get_db)
+):
+    """
+    聊天接口（带工具调用能力）
+    
+    使用Agent系统进行智能工具调用，支持：
+    - 订单查询
+    - 商品信息
+    - 知识库搜索
+    - 常见问题
+    - 电商平台数据
+    - 人工转接
+
+    参数:
+    message: 用户消息内容
+    enterprise_id: 企业ID
+    user_id: 用户ID
+
+    返回:
+    工具调用结果和最终回答
+    """
+    security_service = get_security_service()
+    
+    # 验证用户身份
+    security_context = security_service.validate_user_identity(
+        user_id=str(user_id) if user_id else None,
+        enterprise_id=str(enterprise_id) if enterprise_id else None
+    )
+    
+    if not security_context.is_authenticated:
+        return {
+            "success": False,
+            "error": "身份验证失败，请重新登录",
+            "message": message,
+            "tools_used": [],
+            "tool_results": [],
+            "debug_info": {"authentication": "failed"},
+            "available_tools": []
+        }
+    
+    # 设置安全上下文，供工具调用时使用
+    set_current_security_context(security_context)
+    
+    agent_executor = get_agent_executor()
+    
+    # 分析并执行工具
+    tools_used, results, debug_info = await agent_executor.analyze_and_execute(
+        message,
+        enterprise_id=str(enterprise_id) if enterprise_id else None,
+        user_id=str(user_id) if user_id else None
+    )
+    
+    # 格式化工具结果
+    tool_results = []
+    for r in results:
+        tool_result = r["result"]
+        tool_results.append({
+            "tool_name": r["tool_name"],
+            "success": tool_result.success,
+            "data": tool_result.data,
+            "error": tool_result.error_message if not tool_result.success else None
+        })
+    
+    # 获取可用工具列表
+    available_tools = []
+    for tool in agent_executor.registry.list_tools():
+        available_tools.append({
+            "name": tool.name,
+            "description": tool.description,
+            "type": tool.tool_type.value if hasattr(tool.tool_type, "value") else str(tool.tool_type)
+        })
+    
+    return {
+        "success": True,
+        "message": message,
+        "tools_used": tools_used,
+        "tool_results": tool_results,
+        "debug_info": debug_info,
+        "available_tools": available_tools
+    }
+
+
+@app.get("/api/v1/tools")
+async def list_tools():
+    """
+    列出所有可用工具
+    """
+    agent_executor = get_agent_executor()
+    tools = agent_executor.registry.list_tools()
+    
+    tool_list = []
+    for tool in tools:
+        tool_list.append({
+            "name": tool.name,
+            "description": tool.description,
+            "type": tool.tool_type.value if hasattr(tool.tool_type, "value") else str(tool.tool_type),
+            "parameters": [
+                {
+                    "name": p.name,
+                    "type": p.type,
+                    "description": p.description,
+                    "required": p.required
+                }
+                for p in tool.parameters
+            ]
+        })
+    
+    return {
+        "count": len(tool_list),
+        "tools": tool_list
+    }
+
+
+# ==================== 管理员API端点 ====================
+
+@app.get("/api/v1/admin/sessions")
+async def admin_list_sessions(
+    enterprise_id: str,
+    user_id: str = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员查询会话列表
+
+    供admin-service调用，返回指定企业的所有会话
+
+    参数:
+        enterprise_id: 企业ID
+        user_id: 用户ID（可选，用于过滤）
+        skip: 跳过记录数
+        limit: 返回数量限制
+
+    返回:
+        会话列表
+    """
+    query = db.query(ChatSession).filter(
+        ChatSession.enterprise_id == enterprise_id
+    )
+
+    if user_id:
+        query = query.filter(ChatSession.user_id == user_id)
+
+    sessions = query.order_by(
+        ChatSession.updated_at.desc()
+    ).offset(skip).limit(limit).all()
+
+    return [
+        {
+            "id": str(s.id),
+            "user_id": str(s.user_id) if s.user_id else None,
+            "title": s.title,
+            "message_count": s.message_count,
+            "status": s.status,
+            "created_at": s.created_at.isoformat(),
+            "updated_at": s.updated_at.isoformat()
+        }
+        for s in sessions
+    ]
+
+
+@app.get("/api/v1/admin/sessions/{session_id}")
+async def admin_get_session(
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取会话详情
+
+    供admin-service调用，返回指定会话的详细信息
+
+    参数:
+        session_id: 会话ID
+
+    返回:
+        会话详情
+    """
+    session = db.query(ChatSession).filter(
+        ChatSession.id == session_id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {
+        "id": str(session.id),
+        "user_id": str(session.user_id) if session.user_id else None,
+        "enterprise_id": str(session.enterprise_id),
+        "title": session.title,
+        "message_count": session.message_count,
+        "status": session.status,
+        "created_at": session.created_at.isoformat(),
+        "updated_at": session.updated_at.isoformat()
+    }
+
+
+@app.get("/api/v1/admin/sessions/{session_id}/messages")
+async def admin_get_session_messages(
+    session_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取会话消息
+
+    供admin-service调用，返回指定会话的所有消息
+
+    参数:
+        session_id: 会话ID
+        skip: 跳过记录数
+        limit: 返回数量限制
+
+    返回:
+        消息列表
+    """
+    messages = db.query(ChatMessage).filter(
+        ChatMessage.session_id == session_id
+    ).order_by(
+        ChatMessage.created_at.asc()
+    ).offset(skip).limit(limit).all()
+
+    return [
+        {
+            "id": str(m.id),
+            "role": m.role,
+            "content": m.content,
+            "created_at": m.created_at.isoformat()
+        }
+        for m in messages
+    ]
+
+
+@app.get("/api/v1/admin/sessions/count")
+async def admin_count_sessions(
+    enterprise_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员统计会话数量
+
+    供admin-service调用，返回指定企业的会话总数
+
+    参数:
+        enterprise_id: 企业ID
+
+    返回:
+        会话数量
+    """
+    total = db.query(ChatSession).filter(
+        ChatSession.enterprise_id == enterprise_id
+    ).count()
+
+    return {"total_sessions": total}
+
+
 # ==================== 反馈管理API ====================
 
 @app.post("/api/v1/feedback")
 async def submit_feedback(
-    message_id: UUID,
-    user_id: UUID,
+    message_id: str,
+    user_id: str,
     rating: str,
     reason: str = None,
     db: Session = Depends(get_db)
@@ -620,7 +952,7 @@ async def submit_feedback(
 
 @app.get("/api/v1/feedback/{message_id}")
 async def get_message_feedback(
-    message_id: UUID,
+    message_id: str,
     db: Session = Depends(get_db)
 ):
     """
@@ -701,6 +1033,171 @@ async def export_feedback_for_finetuning():
     }
 
 
+# ==================== 电商配置API ====================
+
+@app.get("/api/v1/ecommerce/platforms")
+async def get_ecommerce_platforms(enterprise_id: str):
+    """
+    获取企业电商平台配置
+
+    供企业管理员调用，获取该企业已配置的电商平台列表
+
+    参数:
+        enterprise_id: 企业ID
+
+    返回:
+        电商平台配置列表
+    """
+    try:
+        platforms = await EcommerceConfigService.get_enterprise_platforms(str(enterprise_id))
+        return platforms
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取平台配置失败: {str(e)}")
+
+
+@app.put("/api/v1/ecommerce/platforms/{platform_id}")
+async def update_ecommerce_platform(
+    enterprise_id: str,
+    platform_id: str,
+    enabled: bool,
+    api_config: Optional[dict] = None,
+    sync_config: Optional[dict] = None
+):
+    """
+    更新企业电商平台配置
+
+    供企业管理员调用，更新指定平台的配置
+
+    参数:
+        enterprise_id: 企业ID
+        platform_id: 平台ID
+        enabled: 是否启用
+        api_config: API配置（可选）
+        sync_config: 同步配置（可选）
+
+    返回:
+        更新后的平台配置
+    """
+    try:
+        result = await EcommerceConfigService.update_platform_config(
+            enterprise_id=str(enterprise_id),
+            platform_id=platform_id,
+            enabled=enabled,
+            api_config=api_config,
+            sync_config=sync_config
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新平台配置失败: {str(e)}")
+
+
+@app.get("/api/v1/ecommerce/tools")
+async def get_ecommerce_tools(enterprise_id: str):
+    """
+    获取企业电商工具配置
+
+    供企业管理员调用，获取该企业已配置的电商工具列表
+
+    参数:
+        enterprise_id: 企业ID
+
+    返回:
+        电商工具配置列表
+    """
+    try:
+        tools = await EcommerceConfigService.get_tool_configs(str(enterprise_id))
+        return tools
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取工具配置失败: {str(e)}")
+
+
+@app.put("/api/v1/ecommerce/tools/{tool_name}")
+async def update_ecommerce_tool(
+    enterprise_id: str,
+    tool_name: str,
+    enabled: bool,
+    config: Optional[dict] = None
+):
+    """
+    更新企业电商工具配置
+
+    供企业管理员调用，更新指定工具的配置
+
+    参数:
+        enterprise_id: 企业ID
+        tool_name: 工具名称
+        enabled: 是否启用
+        config: 工具配置（可选）
+
+    返回:
+        更新后的工具配置
+    """
+    try:
+        result = await EcommerceConfigService.update_tool_config(
+            enterprise_id=str(enterprise_id),
+            tool_name=tool_name,
+            enabled=enabled,
+            config=config
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新工具配置失败: {str(e)}")
+
+
+@app.get("/api/v1/ecommerce/registry/platforms")
+async def get_platform_registry():
+    """
+    获取平台注册表
+
+    获取系统支持的所有电商平台列表，支持动态添加
+    """
+    try:
+        platforms = await EcommerceConfigService.get_all_platforms()
+        return platforms
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取平台注册表失败: {str(e)}")
+
+
+@app.post("/api/v1/ecommerce/registry/platforms")
+async def add_platform(
+    platform_id: str,
+    name: str,
+    icon: str = "🔧",
+    api_type: str = "custom",
+    request: Optional[AddPlatformRequest] = None
+):
+    """
+    添加新平台
+
+    无需重启服务，即可添加新的电商平台支持
+
+    参数:
+        platform_id: 平台唯一ID
+        name: 平台名称
+        icon: 平台图标（默认🔧）
+        api_type: API类型（默认custom）
+        request: 请求体，包含 config_schema
+    """
+    try:
+        config_schema = request.config_schema if request else None
+        result = await EcommerceConfigService.add_platform(
+            platform_id=platform_id,
+            name=name,
+            icon=icon,
+            api_type=api_type,
+            config_schema=config_schema
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"添加平台失败: {str(e)}")
+
+
 # ==================== 生命周期管理 ====================
 
 @app.on_event("startup")
@@ -724,6 +1221,10 @@ async def startup():
     rag_engine = get_rag_engine()
     print("RAG engine initialized")
 
+    # 初始化Agent系统（包含工具系统）
+    agent_executor = get_agent_executor()
+    print("Agent system initialized")
+
     print("Chat Service ready!")
 
 
@@ -736,3 +1237,8 @@ async def shutdown():
     """
     print("Chat Service shutting down...")
     await redis_manager.disconnect()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)

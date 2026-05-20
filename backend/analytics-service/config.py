@@ -1,31 +1,47 @@
 """
-Analytics Service Configuration
+Analytics-Service Configuration
+基于common配置模块
 """
 import os
-from typing import Optional
-from pydantic_settings import BaseSettings
+import sys
+from pathlib import Path
 from functools import lru_cache
 
+# 添加backend根目录到Python路径
+backend_root = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_root))
 
-class Settings(BaseSettings):
-    """Analytics Service settings"""
+# 使用common配置
+try:
+    from common.config import CommonSettings
+except ImportError:
+    from pydantic_settings import BaseSettings
+    CommonSettings = BaseSettings
 
-    APP_NAME: str = "Analytics Service"
+
+class Settings(CommonSettings):
+    """Analytics-Service Service settings - 继承通用配置"""
+    
+    APP_NAME: str = "Analytics-Service Service"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
-
+    
+    # 使用环境变量前缀以支持多服务隔离
     DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/rag_service"
+        "ANALYTICS-SERVICE_DATABASE_URL",
+        os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/analytics-service")
     )
-    DB_POOL_SIZE: int = 10
-    DB_MAX_OVERFLOW: int = 20
-
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD")
-
+    
+    REDIS_URL: str = os.getenv("ANALYTICS-SERVICE_REDIS_URL", "redis://localhost:6379/2")
+    
+    # JWT配置（复用通用配置）
+    SECRET_KEY: str = os.getenv("ANALYTICS-SERVICE_SECRET_KEY", os.getenv("SECRET_KEY", "analytics-service-secret-key"))
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # CORS
     CORS_ORIGINS: list = ["*"]
-
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
@@ -33,6 +49,7 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
+    """获取缓存的配置实例"""
     return Settings()
 
 

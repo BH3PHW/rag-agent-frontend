@@ -1,74 +1,55 @@
-# RAG智能客服项目 - 完整Python入门教程
+# 后端文档索引
 
-## 📚 教程概览
-
-这是一个专为初学者设计的Python入门教程，以RAG智能客服项目为基础，带领你从零开始学习Python Web开发。
-
-## 📖 课程列表
-
-| 课程 | 文件 | 内容 |
-|------|------|------|
-| 第1课 | [01_python_basics.md](01_python_basics.md) | Python基础入门 |
-| 第2课 | [02_web_development.md](02_web_development.md) | Web开发入门 |
-| 第3课 | [03_database.md](03_database.md) | 数据库与持久化 |
-| 第4课 | [04_microservices_deployment.md](04_microservices_deployment.md) | 微服务与部署 |
-| 总览 | [COURSE_OVERVIEW.md](COURSE_OVERVIEW.md) | 课程总览与学习路线 |
-
-## 🎯 配套练习代码
-
-在 `PRACTICE/` 文件夹中：
-- `practice_01_hello.py` - 你好世界
-- `practice_02_functions.py` - 函数练习
-- `practice_03_lists_dicts.py` - 列表字典
-- `practice_04_simple_chat.py` - 简单聊天
-- `practice_05_first_api.py` - 第一个API
-- `practice_06_simple_chat_api.py` - 简单聊天API
-- `practice_07_sqlite.py` - SQLite数据库
-- `practice_08_orm.py` - SQLAlchemy ORM
-- `practice_09_redis.py` - Redis缓存
-- `practice_10_complete_faq.py` - 完整FAQ系统
-
-## 🚀 如何使用
-
-1. 从 [COURSE_OVERVIEW.md](COURSE_OVERVIEW.md) 开始，了解学习路线
-2. 按顺序学习课程（建议每周一课）
-3. 运行 `PRACTICE/` 文件夹中的练习代码
-4. 阅读项目中的真实代码，对比学习
-
-## 💡 学习建议
-
-- **动手实践**：每个示例代码都要亲自运行
-- **循序渐进**：先理解基础，再看复杂的代码
-- **对比学习**：教程示例 vs 项目真实代码
-- **不怕出错**：错误是最好的老师
-
-## 📁 项目结构
-
-```
-rag-customer-service/      # 后端仓库
-├── backend/
-│   ├── api-gateway/      # API网关（端口8080）
-│   ├── user-service/     # 用户服务
-│   ├── chat-service/     # 聊天服务
-│   └── knowledge-service/ # 知识库服务
-│
-rag-agent-frontend/        # 前端仓库
-├── apps/
-│   ├── consumer/         # 消费者端（端口3001）
-│   ├── enterprise/      # 企业端（端口3002）
-│   └── system-admin/    # 管理端（端口3003）
-```
-
-## 🎓 学完课程后
-
-你将能够：
-- ✅ 编写Python代码
-- ✅ 使用FastAPI创建Web API
-- ✅ 操作数据库（SQLAlchemy ORM）
-- ✅ 理解微服务架构
-- ✅ 使用Docker部署项目
-- ✅ 独立阅读和修改本项目代码
+本文档索引提供了后端项目中所有技术文档的概览。
 
 ---
 
-**祝学习愉快！🎉✨
+## 📚 核心文档
+
+| 文档 | 说明 |
+|------|------|
+| [ARCHITECTURE_FINAL.md](ARCHITECTURE_FINAL.md) | 项目最终架构文档 |
+| [API_SPECIFICATION.md](API_SPECIFICATION.md) | API接口规范 |
+| [DEPLOYMENT_AND_DEBUGGING.md](DEPLOYMENT_AND_DEBUGGING.md) | 部署与调试指南 |
+
+---
+
+## 🔐 安全相关
+
+| 文档 | 说明 |
+|------|------|
+| [SECURITY_DEPLOYMENT_ARCHITECTURE.md](SECURITY_DEPLOYMENT_ARCHITECTURE.md) | 安全部署架构 |
+| [SECURITY_GUIDE.md](SECURITY_GUIDE.md) | 安全配置指南 |
+| [ROLE_PERMISSION_SYSTEM.md](ROLE_PERMISSION_SYSTEM.md) | 角色权限系统 |
+
+---
+
+## 🔧 维护与优化
+
+| 文档 | 说明 |
+|------|------|
+| [API_CONSISTENCY_REPORT.md](API_CONSISTENCY_REPORT.md) | API一致性检查报告 |
+| [DATABASE_CRUD_REFACTORING_REPORT.md](DATABASE_CRUD_REFACTORING_REPORT.md) | 数据库CRUD模块重构报告 |
+| [SYSTEM_ADMIN_PORTAL_INTEGRATION.md](SYSTEM_ADMIN_PORTAL_INTEGRATION.md) | 系统管理门户集成指南 |
+
+---
+
+## 📝 文档更新记录
+
+| 日期 | 更新内容 |
+|------|---------|
+| 2026-05-20 | 完善客服坐席系统功能，补充坐席API和前端门户文档 |
+| 2026-05-19 | 清理冗余文档，整合为10个核心文档 |
+| 2026-05-19 | 添加API一致性和CRUD重构报告 |
+
+---
+
+## 🚀 快速导航
+
+**部署**：请查看 [DEPLOYMENT_AND_DEBUGGING.md](DEPLOYMENT_AND_DEBUGGING.md)
+
+**API开发**：请查看 [API_SPECIFICATION.md](API_SPECIFICATION.md)
+
+**安全配置**：请查看 [SECURITY_GUIDE.md](SECURITY_GUIDE.md)
+
+**架构设计**：请查看 [ARCHITECTURE_FINAL.md](ARCHITECTURE_FINAL.md)

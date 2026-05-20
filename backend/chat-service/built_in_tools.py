@@ -1,201 +1,389 @@
 """
-Built-in Tools for Agent System
+内置工具定义（安全增强版）
 
-Includes:
-1. Order query tool
-2. Knowledge base search tool
-3. Product info tool
-4. Customer service transfer tool
+功能：
+1. 消费者身份识别 - 自动识别用户来自哪个电商平台
+2. 订单查询 - 调用真实电商平台 API
+3. 物流查询 - 获取实时物流信息
+4. 商品查询 - 获取商品信息
+5. 知识库和 FAQ
+6. 安全验证 - 消费者身份验证、权限控制
 """
-from typing import List, Dict, Any, Optional
-from datetime import datetime
-from uuid import UUID
+from typing import Dict, Any, Optional, List
+import re
+import sys
+from pathlib import Path
 
-from .tool_system import (
-    ToolDefinition,
-    ParameterDefinition,
-    ToolType,
-    get_tool_registry
-)
+try:
+    from .tool_system import (
+        ToolDefinition,
+        ParameterDefinition,
+        ToolType,
+        get_tool_registry
+    )
+    from .security import SecurityContext, get_security_service
+    from .ecommerce_integration import EcommerceIntegrationService
+except ImportError:
+    sys.path.insert(0, str(Path(__file__).parent))
+    from tool_system import (
+        ToolDefinition,
+        ParameterDefinition,
+        ToolType,
+        get_tool_registry
+    )
+    from security import SecurityContext, get_security_service
+    from ecommerce_integration import EcommerceIntegrationService
 
 
-# =============================================
-# Example Data (for demonstration purposes)
-# In production, this would be from your order-service
-# =============================================
-SAMPLE_ORDERS = {
+# 全局安全上下文缓存（实际项目应该用更安全的方式）
+_security_context_cache: Dict[str, SecurityContext] = {}
+
+
+def set_current_security_context(context: SecurityContext, key: str = "default"):
+    """设置当前安全上下文"""
+    _security_context_cache[key] = context
+
+
+def get_current_security_context(key: str = "default") -> Optional[SecurityContext]:
+    """获取当前安全上下文"""
+    return _security_context_cache.get(key)
+
+
+def register_standard_tools() -> None:
+    """注册标准工具"""
+    registry = get_tool_registry()
+    
+    order_query = ToolDefinition(
+        name="query_order",
+        description="查询订单信息",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="order_id",
+                type="string",
+                description="订单编号",
+                required=True
+            )
+        ],
+        handler=lambda **kwargs: order_query_tool(**kwargs)
+    )
+    
+    product_info = ToolDefinition(
+        name="query_product",
+        description="查询商品信息",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="product_name",
+                type="string",
+                description="商品名称",
+                required=False
+            ),
+            ParameterDefinition(
+                name="product_id",
+                type="string",
+                description="商品编号",
+                required=False
+            )
+        ],
+        handler=lambda **kwargs: product_info_tool(**kwargs)
+    )
+    
+    kb_search = ToolDefinition(
+        name="search_kb",
+        description="搜索知识库",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="query",
+                type="string",
+                description="搜索查询内容",
+                required=True
+            )
+        ],
+        handler=lambda **kwargs: kb_search_tool(**kwargs)
+    )
+    
+    human_transfer = ToolDefinition(
+        name="transfer_human",
+        description="转接人工客服",
+        tool_type=ToolType.BUSINESS_ACTION,
+        parameters=[
+            ParameterDefinition(
+                name="reason",
+                type="string",
+                description="转介原因",
+                required=False,
+                default="用户请求人工服务"
+            )
+        ],
+        handler=lambda **kwargs: human_transfer_tool(**kwargs)
+    )
+    
+    faq_lookup = ToolDefinition(
+        name="lookup_faq",
+        description="查询常见问题",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="question",
+                type="string",
+                description="用户的问题",
+                required=True
+            )
+        ],
+        handler=lambda **kwargs: faq_lookup_tool(**kwargs)
+    )
+    
+    registry.register(order_query)
+    registry.register(product_info)
+    registry.register(kb_search)
+    registry.register(human_transfer)
+    registry.register(faq_lookup)
+
+
+def register_ecommerce_tools() -> None:
+    """注册电商工具 - 包含真实 API 调用"""
+    registry = get_tool_registry()
+    
+    ecommerce_order = ToolDefinition(
+        name="query_ecommerce_order",
+        description="查询电商平台订单 - 支持多平台自动识别",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="platform_type",
+                type="string",
+                description="电商平台(taobao/jd/douyin/pinduoduo/xianyu/xiaohongshu)",
+                required=False
+            ),
+            ParameterDefinition(
+                name="order_id",
+                type="string",
+                description="订单编号",
+                required=False
+            ),
+            ParameterDefinition(
+                name="user_message",
+                type="string",
+                description="用户原始消息（用于自动识别平台）",
+                required=False
+            )
+        ],
+        handler=lambda **kwargs: ecommerce_order_tool(**kwargs)
+    )
+    
+    order_status = ToolDefinition(
+        name="query_order_status",
+        description="查询订单状态和物流信息",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="platform_type",
+                type="string",
+                description="电商平台",
+                required=True
+            ),
+            ParameterDefinition(
+                name="order_id",
+                type="string",
+                description="订单编号",
+                required=True
+            )
+        ],
+        handler=lambda **kwargs: order_status_tool(**kwargs)
+    )
+    
+    logistics_query = ToolDefinition(
+        name="query_logistics",
+        description="查询物流信息",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="platform_type",
+                type="string",
+                description="电商平台",
+                required=True
+            ),
+            ParameterDefinition(
+                name="order_id",
+                type="string",
+                description="订单编号",
+                required=True
+            )
+        ],
+        handler=lambda **kwargs: logistics_query_tool(**kwargs)
+    )
+    
+    ecommerce_product = ToolDefinition(
+        name="query_ecommerce_product",
+        description="查询电商平台商品",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="platform_type",
+                type="string",
+                description="电商平台",
+                required=False
+            ),
+            ParameterDefinition(
+                name="product_name",
+                type="string",
+                description="商品名称",
+                required=False
+            ),
+            ParameterDefinition(
+                name="keyword",
+                type="string",
+                description="搜索关键词",
+                required=False
+            )
+        ],
+        handler=lambda **kwargs: ecommerce_product_tool(**kwargs)
+    )
+    
+    ecommerce_platforms = ToolDefinition(
+        name="list_ecommerce_platforms",
+        description="获取电商平台列表",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[],
+        handler=lambda **kwargs: ecommerce_platforms_tool(**kwargs)
+    )
+    
+    consumer_identity = ToolDefinition(
+        name="identify_consumer",
+        description="识别消费者身份和来源平台",
+        tool_type=ToolType.DATA_QUERY,
+        parameters=[
+            ParameterDefinition(
+                name="user_message",
+                type="string",
+                description="用户消息",
+                required=True
+            ),
+            ParameterDefinition(
+                name="user_id",
+                type="string",
+                description="用户ID",
+                required=False
+            )
+        ],
+        handler=lambda **kwargs: consumer_identity_tool(**kwargs)
+    )
+    
+    registry.register(ecommerce_order)
+    registry.register(order_status)
+    registry.register(logistics_query)
+    registry.register(ecommerce_product)
+    registry.register(ecommerce_platforms)
+    registry.register(consumer_identity)
+
+
+# ==================== 模拟数据（基础工具） ====================
+MOCK_ORDERS = {
     "ORD-1001": {
         "order_id": "ORD-1001",
-        "status": "shipped",
+        "product_name": "智能蓝牙音箱",
         "customer_name": "张三",
-        "total_amount": 299.99,
-        "items": [{"name": "智能音箱", "quantity": 1, "price": 299.99}],
-        "shipping_info": {
-            "address": "北京市朝阳区xxx街道",
-            "tracking_number": "SF1234567890",
-            "carrier": "顺丰速运"
-        },
-        "estimated_delivery": "2024-05-20"
-    },
-    "ORD-1002": {
-        "order_id": "ORD-1002",
-        "status": "processing",
-        "customer_name": "李四",
-        "total_amount": 899.00,
-        "items": [{"name": "无线蓝牙耳机", "quantity": 1, "price": 899.00}],
-        "shipping_info": {
-            "address": "上海市浦东新区xxx路",
-            "tracking_number": None,
-            "carrier": None
-        },
-        "estimated_delivery": "2024-05-22"
-    },
-    "ORD-1003": {
-        "order_id": "ORD-1003",
-        "status": "delivered",
-        "customer_name": "王五",
-        "total_amount": 1599.00,
-        "items": [{"name": "4K显示器", "quantity": 1, "price": 1599.00}],
-        "shipping_info": {
-            "address": "广州市天河区xxx街",
-            "tracking_number": "YZ9876543210",
-            "carrier": "韵达快递"
-        },
-        "estimated_delivery": "2024-05-15"
+        "customer_phone": "138****1234",
+        "order_amount": 299,
+        "order_status": "已发货",
+        "created_at": "2024-01-15T10:30:00"
     }
 }
 
-SAMPLE_PRODUCTS = {
-    "prod-001": {
-        "id": "prod-001",
-        "name": "智能音箱 Pro",
-        "price": 299.99,
-        "category": "智能家居",
-        "description": "支持语音助手、音乐播放、智能家居控制",
-        "stock": 500,
-        "warranty": "1年质保"
-    },
-    "prod-002": {
-        "id": "prod-002",
-        "name": "无线蓝牙耳机 Ultra",
-        "price": 899.00,
-        "category": "音频设备",
-        "description": "主动降噪、续航40小时、IPX7防水",
-        "stock": 250,
-        "warranty": "2年质保"
+MOCK_PRODUCTS = {
+    "PROD-001": {
+        "product_id": "PROD-001",
+        "product_name": "智能蓝牙音箱",
+        "price": 299,
+        "stock": 100,
+        "description": "高品质无线蓝牙音箱，支持语音控制"
     }
 }
 
+MOCK_KB = [
+    {
+        "id": "KB-001",
+        "title": "退换货政策",
+        "content": "我们支持7天无理由退换货，商品需保持原包装完好。",
+        "category": "售后服务"
+    }
+]
 
-# =============================================
-# Tool 1: Order Query
-# =============================================
+MOCK_FAQS = {
+    "退换货": {
+        "question": "如何申请退换货？",
+        "answer": "您可以在订单详情页点击申请退换货按钮，或联系客服处理。"
+    }
+}
+
+ECOMMERCE_PLATFORMS = {
+    "taobao": {"name": "淘宝/天猫", "enabled": True},
+    "jd": {"name": "京东", "enabled": True},
+    "douyin": {"name": "抖音商城", "enabled": True},
+    "pinduoduo": {"name": "拼多多", "enabled": True},
+    "xianyu": {"name": "闲鱼", "enabled": True},
+    "xiaohongshu": {"name": "小红书", "enabled": True}
+}
+
+
+# ==================== 基础工具实现 ====================
 def order_query_tool(
     order_id: str,
     enterprise_id: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    查询订单信息
+    """查询订单信息（带安全检查）"""
+    security_context = get_current_security_context()
     
-    Args:
-        order_id: 订单号
-        enterprise_id: 企业ID（自动注入）
-        user_id: 用户ID（自动注入）
-    
-    Returns:
-        订单详细信息
-    """
-    if order_id in SAMPLE_ORDERS:
-        order = SAMPLE_ORDERS[order_id]
-        
-        # Format status for better readability
-        status_map = {
-            "pending": "待处理",
-            "processing": "处理中",
-            "shipped": "已发货",
-            "delivered": "已送达"
-        }
-        
-        result = {
-            "success": True,
-            "order_id": order["order_id"],
-            "status": status_map.get(order["status"], order["status"]),
-            "status_english": order["status"],
-            "customer_name": order["customer_name"],
-            "total_amount": order["total_amount"],
-            "items": order["items"],
-            "estimated_delivery": order["estimated_delivery"]
-        }
-        
-        if order["shipping_info"]["tracking_number"]:
-            result["shipping"] = {
-                "tracking_number": order["shipping_info"]["tracking_number"],
-                "carrier": order["shipping_info"]["carrier"],
-                "address": order["shipping_info"]["address"]
-            }
-        
-        return result
-    else:
+    if not security_context or not security_context.is_authenticated:
         return {
             "success": False,
-            "error": f"订单 '{order_id}' 不存在，请确认订单号是否正确",
-            "available_orders": list(SAMPLE_ORDERS.keys())[:5]
+            "error": "用户未认证，请先登录",
+            "data": None
         }
+    
+    security_service = get_security_service()
+    has_access, _ = security_service.verify_order_access(
+        order_id=order_id,
+        security_context=security_context
+    )
+    
+    if not has_access:
+        return {
+            "success": False,
+            "error": "没有权限访问该订单",
+            "data": None
+        }
+    
+    order = MOCK_ORDERS.get(order_id)
+    if order:
+        return {"success": True, "data": order}
+    return {"success": False, "error": f"订单 {order_id} 未找到"}
 
 
-# =============================================
-# Tool 2: Product Info Query
-# =============================================
 def product_info_tool(
-    product_name: str,
+    product_name: str = None,
     product_id: Optional[str] = None,
     enterprise_id: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    查询产品信息
-    
-    Args:
-        product_name: 产品名称或关键词
-        product_id: 产品ID（可选）
-        enterprise_id: 企业ID
-        user_id: 用户ID
-    
-    Returns:
-        产品详细信息
-    """
-    results = []
-    
-    # Search by product ID first
-    if product_id and product_id in SAMPLE_PRODUCTS:
-        results.append(SAMPLE_PRODUCTS[product_id])
-    
-    # Search by name
-    for product in SAMPLE_PRODUCTS.values():
-        if (product_name.lower() in product["name"].lower() 
-            or product_name.lower() in product["category"].lower()
-            or product_name.lower() in product["description"].lower()):
-            if product not in results:
-                results.append(product)
-    
-    if not results:
-        return {
-            "success": False,
-            "error": f"未找到与 '{product_name}' 相关的产品",
-            "available_products": [p["name"] for p in SAMPLE_PRODUCTS.values()]
-        }
-    
-    return {
-        "success": True,
-        "count": len(results),
-        "products": results[:3]
-    }
+    """查询商品信息"""
+    if product_id:
+        product = MOCK_PRODUCTS.get(product_id)
+        if product:
+            return {"success": True, "data": product}
+    if product_name:
+        products = [
+            p for p in MOCK_PRODUCTS.values()
+            if product_name.lower() in p["product_name"].lower()
+        ]
+        if products:
+            return {"success": True, "data": products[0]}
+    return {"success": False, "error": "未找到相关商品"}
 
 
-# =============================================
-# Tool 3: Knowledge Base Search (Enhanced)
-# =============================================
 def kb_search_tool(
     query: str,
     knowledge_base_id: Optional[str] = None,
@@ -203,251 +391,365 @@ def kb_search_tool(
     enterprise_id: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    搜索企业知识库
-    
-    Args:
-        query: 搜索关键词
-        knowledge_base_id: 指定知识库（可选）
-        top_k: 返回结果数量
-        enterprise_id: 企业ID
-        user_id: 用户ID
-    
-    Returns:
-        搜索结果
-    """
-    # In production, this would call knowledge-service API
+    """搜索知识库"""
+    results = [
+        kb for kb in MOCK_KB
+        if query.lower() in kb["title"].lower() or query.lower() in kb["content"].lower()
+    ]
     return {
         "success": True,
-        "query": query,
-        "top_k": top_k,
-        "results": [
-            {
-                "title": f"关于{query}的常见问题",
-                "content": f"这是关于{query}的详细说明文档，包含使用指南、注意事项等。",
-                "relevance_score": 0.92,
-                "source": "帮助中心"
-            },
-            {
-                "title": f"{query}操作教程",
-                "content": f"详细教程，教您如何使用{query}功能。",
-                "relevance_score": 0.85,
-                "source": "教程文档"
-            }
-        ]
+        "data": {
+            "query": query,
+            "count": len(results),
+            "results": results
+        }
     }
 
 
-# =============================================
-# Tool 4: Customer Service Transfer
-# =============================================
 def human_transfer_tool(
     reason: str = "用户请求转接",
     priority: str = "normal",
     enterprise_id: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    请求转接人工客服
-    
-    Args:
-        reason: 转接原因
-        priority: 优先级 (low/normal/high/urgent)
-        enterprise_id: 企业ID
-        user_id: 用户ID
-    
-    Returns:
-        转接结果
-    """
-    # In production, this would trigger alert-service
-    ticket_id = f"TKT-{int(datetime.utcnow().timestamp())}"
-    
+    """人工转接工具"""
     return {
         "success": True,
-        "ticket_id": ticket_id,
-        "message": "已为您转接人工客服",
-        "estimated_wait": "约2-5分钟",
-        "priority": priority
+        "data": {
+            "transfer_id": f"TRF-{hash(reason) % 10000:04d}",
+            "status": "in_progress",
+            "message": "正在为您转接人工客服，请稍候..."
+        }
     }
 
 
-# =============================================
-# Tool 5: FAQ Lookup
-# =============================================
 def faq_lookup_tool(
     question: str,
     category: Optional[str] = None,
     enterprise_id: Optional[str] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    查询常见问题
+    """FAQ查询工具"""
+    for key, faq in MOCK_FAQS.items():
+        if key in question:
+            return {"success": True, "data": faq}
+    return {
+        "success": False,
+        "error": "未找到相关的常见问题解答",
+        "data": {"question": question}
+    }
+
+
+# ==================== 电商工具实现（安全增强版） ====================
+def _analyze_platform_from_message(message: str) -> Optional[str]:
+    """从用户消息中分析平台"""
+    if not message:
+        return None
+    query_lower = message.lower()
     
-    Args:
-        question: 用户问题
-        category: 问题分类
-        enterprise_id: 企业ID
-        user_id: 用户ID
-    
-    Returns:
-        FAQ匹配结果
-    """
-    # Sample FAQ database
-    faqs = {
-        "如何退货": {
-            "answer": "退货流程：1. 登录账号 2. 找到订单 3. 点击申请退货 4. 填写原因并提交 5. 等待审核 6. 寄回商品。",
-            "category": "售后",
-            "related_links": ["https://example.com/returns"]
-        },
-        "如何退款": {
-            "answer": "退款将在收到退货后的3-5个工作日内原路返回您的支付账户。",
-            "category": "售后",
-            "related_links": []
-        },
-        "发货时间": {
-            "answer": "订单通常在24小时内发货，周末及节假日可能顺延。",
-            "category": "配送",
-            "related_links": []
-        },
-        "联系方式": {
-            "answer": "客服电话：400-123-4567；工作时间：9:00-21:00；邮箱：support@example.com",
-            "category": "联系",
-            "related_links": []
-        }
+    platform_keywords = {
+        "taobao": ["淘宝", "taobao", "tb", "天猫", "ali"],
+        "jd": ["京东", "jingdong", "jd"],
+        "douyin": ["抖音", "douyin", "dy", "tiktok"],
+        "pinduoduo": ["拼多多", "pinduoduo", "pdd"],
+        "xianyu": ["闲鱼", "xianyu"],
+        "xiaohongshu": ["小红书", "xiaohongshu", "xhs", "redbook"]
     }
     
-    # Simple keyword matching
-    matched_question = None
-    for q in faqs:
-        if any(keyword in question for keyword in q.split(' ')) or q in question:
-            matched_question = q
-            break
+    for platform, keywords in platform_keywords.items():
+        if any(kw in query_lower for kw in keywords):
+            return platform
+    return None
+
+
+def _extract_order_id_from_message(message: str) -> Optional[str]:
+    """从用户消息中提取订单号"""
+    if not message:
+        return None
+    patterns = [
+        r'([A-Z]{2,}-\d+)',
+        r'(taobao_\d+)',
+        r'(jd_\d+)',
+        r'(JD\d+)',
+        r'(DY\d+)',
+        r'(PDD\d+)'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
+def consumer_identity_tool(
+    user_message: str,
+    user_id: Optional[str] = None,
+    enterprise_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """消费者身份识别工具"""
+    detected_platform = _analyze_platform_from_message(user_message)
+    order_id = _extract_order_id_from_message(user_message)
     
-    if matched_question:
+    identity_info = {
+        "detected": detected_platform is not None,
+        "platform": detected_platform,
+        "platform_name": ECOMMERCE_PLATFORMS.get(detected_platform, {}).get("name") if detected_platform else None,
+        "order_id_found": order_id,
+        "user_id": user_id,
+        "enterprise_id": enterprise_id
+    }
+    
+    if detected_platform:
         return {
             "success": True,
-            "question": matched_question,
-            "answer": faqs[matched_question]["answer"],
-            "category": faqs[matched_question]["category"],
-            "related_links": faqs[matched_question]["related_links"]
+            "data": {
+                "message": f"检测到您来自 {identity_info['platform_name']} 平台",
+                "identity": identity_info,
+                "can_query_orders": True,
+                "can_query_logistics": True
+            }
         }
     else:
         return {
-            "success": False,
-            "error": "未找到匹配的FAQ",
-            "suggested_questions": list(faqs.keys())
+            "success": True,
+            "data": {
+                "message": "无法自动识别您所在的平台，请告诉我您是在哪个平台购物的？",
+                "identity": identity_info,
+                "available_platforms": list(ECOMMERCE_PLATFORMS.keys())
+            }
         }
 
 
-# =============================================
-# Register all tools
-# =============================================
-def register_standard_tools() -> None:
-    """Register all standard built-in tools"""
-    registry = get_tool_registry()
+def ecommerce_order_tool(
+    platform_type: str = None,
+    order_id: Optional[str] = None,
+    user_message: Optional[str] = None,
+    enterprise_id: Optional[str] = None,
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """电商订单查询工具（安全增强版）"""
+    # 获取安全上下文
+    security_context = get_current_security_context()
     
-    # 1. Order Query Tool
-    registry.register(ToolDefinition(
-        name="query_order",
-        description="查询订单状态、物流信息、订单详情等",
-        tool_type=ToolType.BUSINESS_ACTION,
-        parameters=[
-            ParameterDefinition(
-                name="order_id",
-                type="string",
-                description="订单号，例如 ORD-1001",
-                required=True
-            )
-        ],
-        handler=order_query_tool
-    ))
+    if not security_context or not security_context.is_authenticated:
+        return {
+            "success": False,
+            "error": "用户未认证，请先登录",
+            "data": None
+        }
     
-    # 2. Product Info Tool
-    registry.register(ToolDefinition(
-        name="query_product",
-        description="查询产品信息、价格、库存、规格等",
-        tool_type=ToolType.DATA_QUERY,
-        parameters=[
-            ParameterDefinition(
-                name="product_name",
-                type="string",
-                description="产品名称或关键词",
-                required=True
-            ),
-            ParameterDefinition(
-                name="product_id",
-                type="string",
-                description="产品ID（可选）",
-                required=False
-            )
-        ],
-        handler=product_info_tool
-    ))
+    # 自动识别平台
+    if not platform_type and user_message:
+        platform_type = _analyze_platform_from_message(user_message)
     
-    # 3. Knowledge Base Search Tool
-    registry.register(ToolDefinition(
-        name="search_kb",
-        description="搜索企业知识库中的文档和帮助内容",
-        tool_type=ToolType.KNOWLEDGE_RETRIEVAL,
-        parameters=[
-            ParameterDefinition(
-                name="query",
-                type="string",
-                description="搜索关键词或问题",
-                required=True
-            ),
-            ParameterDefinition(
-                name="top_k",
-                type="integer",
-                description="返回结果数量，默认5",
-                required=False,
-                default=5
-            )
-        ],
-        handler=kb_search_tool
-    ))
+    if not order_id and user_message:
+        order_id = _extract_order_id_from_message(user_message)
     
-    # 4. Human Transfer Tool
-    registry.register(ToolDefinition(
-        name="transfer_human",
-        description="为用户转接人工客服",
-        tool_type=ToolType.BUSINESS_ACTION,
-        parameters=[
-            ParameterDefinition(
-                name="reason",
-                type="string",
-                description="转接原因（可选）",
-                required=False,
-                default="用户请求转接"
-            ),
-            ParameterDefinition(
-                name="priority",
-                type="string",
-                description="优先级",
-                required=False,
-                default="normal",
-                enum=["low", "normal", "high", "urgent"]
-            )
-        ],
-        handler=human_transfer_tool
-    ))
+    if not platform_type:
+        return {
+            "success": False,
+            "error": "请指定平台类型",
+            "hint": "支持的平台: taobao, jd, douyin, pinduoduo, xianyu, xiaohongshu"
+        }
     
-    # 5. FAQ Lookup Tool
-    registry.register(ToolDefinition(
-        name="lookup_faq",
-        description="查询常见问题库",
-        tool_type=ToolType.KNOWLEDGE_RETRIEVAL,
-        parameters=[
-            ParameterDefinition(
-                name="question",
-                type="string",
-                description="用户问题",
-                required=True
-            )
-        ],
-        handler=faq_lookup_tool
-    ))
+    if platform_type not in ECOMMERCE_PLATFORMS:
+        return {
+            "success": False,
+            "error": f"不支持的平台: {platform_type}",
+            "hint": "支持的平台: taobao, jd, douyin, pinduoduo, xianyu, xiaohongshu"
+        }
+    
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    result = loop.run_until_complete(
+        EcommerceIntegrationService.get_platform_orders(
+            platform_type=platform_type,
+            enterprise_id=enterprise_id or security_context.enterprise_id or "default",
+            order_id=order_id,
+            security_context=security_context
+        )
+    )
+    
+    if result.get("success"):
+        orders = result.get("orders", [])
+        if orders:
+            order = orders[0]
+            return {
+                "success": True,
+                "data": {
+                    "platform": platform_type,
+                    "platform_name": ECOMMERCE_PLATFORMS[platform_type]["name"],
+                    "order": order,
+                    "formatted_message": _format_order_message(order)
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "error": "未找到订单",
+                "platform": platform_type
+            }
+    
+    return result
 
 
-# Initialize and register tools on module load
-register_standard_tools()
+def order_status_tool(
+    platform_type: str,
+    order_id: str,
+    enterprise_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """订单状态查询工具（安全增强版）"""
+    security_context = get_current_security_context()
+    
+    if not security_context or not security_context.is_authenticated:
+        return {
+            "success": False,
+            "error": "用户未认证"
+        }
+    
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    try:
+        result = loop.run_until_complete(
+            EcommerceIntegrationService.get_order_status(
+                platform_type,
+                order_id,
+                enterprise_id or security_context.enterprise_id or "default",
+                security_context
+            )
+        )
+        return result
+    except Exception:
+        return {
+            "success": False,
+            "error": "查询订单状态失败"
+        }
+
+
+def logistics_query_tool(
+    platform_type: str,
+    order_id: str,
+    enterprise_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """物流查询工具（安全增强版）"""
+    security_context = get_current_security_context()
+    
+    if not security_context or not security_context.is_authenticated:
+        return {
+            "success": False,
+            "error": "用户未认证"
+        }
+    
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    try:
+        result = loop.run_until_complete(
+            EcommerceIntegrationService.get_logistics_info(
+                platform_type,
+                order_id,
+                enterprise_id or security_context.enterprise_id or "default",
+                security_context
+            )
+        )
+        
+        if result.get("success"):
+            result["formatted_message"] = _format_logistics_message(result)
+        
+        return result
+    except Exception:
+        return {
+            "success": False,
+            "error": "查询物流信息失败"
+        }
+
+
+def ecommerce_product_tool(
+    platform_type: str = None,
+    product_name: Optional[str] = None,
+    keyword: Optional[str] = None,
+    enterprise_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """电商商品查询"""
+    mock_products = [
+        {
+            "product_id": f"{platform_type}_prod_001" if platform_type else "prod_001",
+            "platform": platform_type or "general",
+            "product_name": "热销商品示例",
+            "price": 299,
+            "stock": 100,
+            "sales_count": 1250
+        }
+    ]
+    return {
+        "success": True,
+        "data": {
+            "platform": platform_type,
+            "products": mock_products,
+            "count": len(mock_products)
+        }
+    }
+
+
+def ecommerce_platforms_tool(
+    enterprise_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """电商平台列表"""
+    return {
+        "success": True,
+        "data": {
+            "platforms": [
+                {"id": pid, "name": p["name"], "enabled": p["enabled"]}
+                for pid, p in ECOMMERCE_PLATFORMS.items()
+            ]
+        }
+    }
+
+
+# ==================== 辅助函数 ====================
+def _format_order_message(order: Dict[str, Any]) -> str:
+    """格式化订单消息"""
+    lines = []
+    lines.append(f"📦 订单信息")
+    lines.append(f"平台：{order.get('platform', '未知')}")
+    lines.append(f"订单号：{order.get('order_id', '未知')}")
+    lines.append(f"商品：{order.get('product_name', '未知')}")
+    lines.append(f"金额：¥{order.get('order_amount', 0)}")
+    lines.append(f"状态：{order.get('order_status', '未知')}")
+    
+    if order.get("shipping_tracking_number"):
+        lines.append(f"快递：{order.get('shipping_carrier', '未知')}")
+        lines.append(f"单号：{order.get('shipping_tracking_number')}")
+    
+    return "\n".join(lines)
+
+
+def _format_logistics_message(logistics: Dict[str, Any]) -> str:
+    """格式化物流消息"""
+    lines = []
+    lines.append(f"🚚 物流信息")
+    lines.append(f"快递：{logistics.get('carrier', '未知')}")
+    lines.append(f"单号：{logistics.get('tracking_number', '未知')}")
+    lines.append(f"状态：{logistics.get('status', '未知')}")
+    
+    timeline = logistics.get("timeline", [])
+    if timeline:
+        lines.append("\n📍 物流轨迹：")
+        for item in timeline:
+            lines.append(f"  {item['time']} - {item['status']} ({item['location']})")
+    
+    return "\n".join(lines)

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, Document, CleaningRule, CleaningJob, AppSettings, Channel, ChatSession, HumanAgent, SensitiveSettings } from './types';
+import type { User, Document, CleaningRule, CleaningJob, AppSettings, Channel, ChatSession, HumanAgent, SensitiveSettings } from '@rag/api-client';
 
 interface AppState {
   activePage: 'dashboard' | 'chat' | 'documents' | 'knowledge' | 'cleaning' | 'sensitive' | 'channels' | 'human-agent' | 'chat-monitor' | 'settings';

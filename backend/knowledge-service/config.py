@@ -1,55 +1,37 @@
 """
 Knowledge Service Configuration
+使用 common 模块的通用配置
 """
 import os
-from typing import Optional
-from pydantic_settings import BaseSettings
+import sys
+from pathlib import Path
 from functools import lru_cache
 
+# 添加backend根目录到Python路径
+backend_root = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_root))
 
-class Settings(BaseSettings):
-    """Knowledge Service settings"""
+try:
+    from common.config import CommonSettings
+except ImportError:
+    from pydantic_settings import BaseSettings
+    CommonSettings = BaseSettings
+
+
+class Settings(CommonSettings):
+    """Knowledge Service settings - 继承通用配置"""
     
-    # Application
     APP_NAME: str = "Knowledge Service"
-    APP_VERSION: str = "1.0.0"
-    DEBUG: bool = False
     
-    # Database
+    # 使用环境变量前缀以支持多服务隔离
     DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", 
-        "postgresql://postgres:postgres@localhost:5432/rag_service"
+        "KNOWLEDGE_DATABASE_URL",
+        os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/knowledge_service")
     )
-    DB_POOL_SIZE: int = 10
-    DB_MAX_OVERFLOW: int = 20
     
-    # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD")
+    REDIS_URL: str = os.getenv("KNOWLEDGE_REDIS_URL", "redis://localhost:6379/0")
     
-    # ChromaDB
-    CHROMA_HOST: str = os.getenv("CHROMA_HOST", "localhost")
-    CHROMA_PORT: int = int(os.getenv("CHROMA_PORT", "8000"))
-    CHROMA_COLLECTION_PREFIX: str = "enterprise_"
-    
-    # RAG Settings
-    CHUNK_SIZE: int = 500
-    CHUNK_OVERLAP: int = 50
-    TOP_K: int = 5
-    SIMILARITY_THRESHOLD: float = 0.7
-    
-    # Rerank Settings
-    RERANK_ENABLED: bool = os.getenv("RERANK_ENABLED", "true").lower() == "true"
-    RERANK_USE_CROSS_ENCODER: bool = os.getenv("RERANK_USE_CROSS_ENCODER", "true").lower() == "true"
-    RERANK_MODEL_NAME: str = os.getenv("RERANK_MODEL_NAME", "shibing624/text2vec-base-chinese")
-    RERANK_INITIAL_TOP_K_MULTIPLIER: int = 3
-    
-    # CORS
-    CORS_ORIGINS: list = ["*"]
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    SECRET_KEY: str = os.getenv("KNOWLEDGE_SECRET_KEY", os.getenv("SECRET_KEY", "knowledge-service-secret-key"))
 
 
 @lru_cache()

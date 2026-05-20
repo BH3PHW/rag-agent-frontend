@@ -46,7 +46,7 @@ services:
     image: chromadb/chroma:latest
     container_name: rag_chroma
     ports:
-      - "8005:8000"
+      - "8006:8000"
     networks:
       - rag_network
     volumes:
@@ -83,7 +83,7 @@ services:
       dockerfile: Dockerfile
     container_name: rag_knowledge_service
     ports:
-      - "8002:8002"
+      - "8003:8003"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/rag_service
       - REDIS_URL=redis://redis:6379/0
@@ -106,7 +106,7 @@ services:
       dockerfile: Dockerfile
     container_name: rag_chat_service
     ports:
-      - "8003:8003"
+      - "8002:8002"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/rag_service
       - REDIS_URL=redis://redis:6379/0
@@ -143,6 +143,25 @@ services:
       - rag_network
     restart: unless-stopped
 
+  channel-service:
+    build:
+      context: ./backend/channel-service
+      dockerfile: Dockerfile
+    container_name: rag_channel_service
+    ports:
+      - "8005:8005"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/rag_service
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag_network
+    restart: unless-stopped
+
   api-gateway:
     build:
       context: ./backend/api-gateway
@@ -166,55 +185,8 @@ services:
         condition: service_started
       alert-service:
         condition: service_started
-    networks:
-      - rag_network
-    restart: unless-stopped
-
-  # ============ 前端服务 ============
-  # 用户端 Widget
-  frontend-consumer:
-    build:
-      context: ./frontend/apps/consumer
-      dockerfile: Dockerfile
-    container_name: rag_frontend_consumer
-    ports:
-      - "3003:80"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
-    depends_on:
-      - api-gateway
-    networks:
-      - rag_network
-    restart: unless-stopped
-
-  # 企业管理控制台
-  frontend-enterprise:
-    build:
-      context: ./frontend/apps/enterprise
-      dockerfile: Dockerfile
-    container_name: rag_frontend_enterprise
-    ports:
-      - "3001:80"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
-    depends_on:
-      - api-gateway
-    networks:
-      - rag_network
-    restart: unless-stopped
-
-  # 系统管理后台
-  frontend-system-admin:
-    build:
-      context: ./frontend/apps/system-admin
-      dockerfile: Dockerfile
-    container_name: rag_frontend_system_admin
-    ports:
-      - "3002:80"
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
-    depends_on:
-      - api-gateway
+      channel-service:
+        condition: service_started
     networks:
       - rag_network
     restart: unless-stopped

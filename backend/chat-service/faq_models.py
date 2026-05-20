@@ -1,12 +1,16 @@
 """
-Chat Service FAQ Models - faq_table in PostgreSQL
+Chat Service FAQ Models - faq_table in SQLite
 """
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Integer, Float, Index
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Integer, Index
 import uuid
 
-from .database import Base
+try:
+    from .database import Base
+    from .models import uuid_column, uuid_fk_column
+except ImportError:
+    from database import Base
+    from models import uuid_column, uuid_fk_column
 
 
 class FAQ(Base):
@@ -26,8 +30,8 @@ class FAQ(Base):
     """
     __tablename__ = "faq_table"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    enterprise_id = Column(UUID(as_uuid=True), ForeignKey("enterprises.id"), nullable=False)
+    id = uuid_column()
+    enterprise_id = uuid_fk_column()
     question = Column(Text, nullable=False, index=True)
     answer = Column(Text, nullable=False)
     keywords = Column(String, nullable=True)  # comma-separated keywords
@@ -40,7 +44,6 @@ class FAQ(Base):
     # Indexes for faster search
     __table_args__ = (
         Index("idx_faq_enterprise", "enterprise_id"),
-        Index("idx_faq_question_gin", postgresql_ops={"question": "gin_trgm_ops"}, postgresql_using="gin"),
     )
 
     def __repr__(self):

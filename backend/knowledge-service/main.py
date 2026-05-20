@@ -462,6 +462,214 @@ async def delete_document(
     return {"message": "Document deleted successfully"}
 
 
+# ==================== 管理员API端点 ====================
+
+@app.get("/api/v1/admin/knowledge-bases")
+async def admin_list_knowledge_bases(
+    enterprise_id: UUID,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员列出知识库
+
+    供admin-service调用，返回指定企业的所有知识库
+
+    参数:
+        enterprise_id: 企业ID
+        skip: 跳过记录数
+        limit: 返回数量限制
+
+    返回:
+        知识库列表
+    """
+    kbs = db.query(KnowledgeBase).filter(
+        KnowledgeBase.enterprise_id == enterprise_id
+    ).offset(skip).limit(limit).all()
+
+    return [
+        {
+            "id": str(kb.id),
+            "name": kb.name,
+            "description": kb.description,
+            "document_count": kb.document_count,
+            "chunk_count": kb.chunk_count,
+            "is_active": kb.is_active,
+            "metadata": kb.metadata_,
+            "created_at": kb.created_at.isoformat(),
+            "updated_at": kb.updated_at.isoformat()
+        }
+        for kb in kbs
+    ]
+
+
+@app.get("/api/v1/admin/knowledge-bases/{kb_id}")
+async def admin_get_knowledge_base(
+    kb_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取知识库详情
+
+    供admin-service调用，返回指定知识库的详细信息
+
+    参数:
+        kb_id: 知识库ID
+
+    返回:
+        知识库详情
+    """
+    kb = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+
+    if not kb:
+        raise HTTPException(status_code=404, detail="Knowledge base not found")
+
+    return {
+        "id": str(kb.id),
+        "enterprise_id": str(kb.enterprise_id),
+        "name": kb.name,
+        "description": kb.description,
+        "document_count": kb.document_count,
+        "chunk_count": kb.chunk_count,
+        "is_active": kb.is_active,
+        "metadata": kb.metadata_,
+        "created_at": kb.created_at.isoformat(),
+        "updated_at": kb.updated_at.isoformat()
+    }
+
+
+@app.get("/api/v1/admin/knowledge-bases/stats")
+async def admin_get_kb_stats(
+    enterprise_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取知识库统计
+
+    供admin-service调用，返回指定企业的知识库统计数据
+
+    参数:
+        enterprise_id: 企业ID
+
+    返回:
+        知识库统计数据
+    """
+    kbs = db.query(KnowledgeBase).filter(
+        KnowledgeBase.enterprise_id == enterprise_id
+    ).all()
+
+    total_docs = sum(kb.document_count for kb in kbs)
+    total_chunks = sum(kb.chunk_count for kb in kbs)
+
+    return {
+        "knowledge_base_count": len(kbs),
+        "total_documents": total_docs,
+        "total_chunks": total_chunks,
+        "knowledge_bases": [
+            {
+                "id": str(kb.id),
+                "name": kb.name,
+                "document_count": kb.document_count,
+                "chunk_count": kb.chunk_count,
+                "is_active": kb.is_active
+            }
+            for kb in kbs
+        ]
+    }
+
+
+@app.get("/api/v1/admin/documents")
+async def admin_list_documents(
+    enterprise_id: UUID,
+    kb_id: UUID = None,
+    status: str = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员列出文档
+
+    供admin-service调用，返回指定企业的所有文档
+
+    参数:
+        enterprise_id: 企业ID
+        kb_id: 知识库ID（可选）
+        status: 文档状态筛选（可选）
+        skip: 跳过记录数
+        limit: 返回数量限制
+
+    返回:
+        文档列表
+    """
+    query = db.query(Document).join(KnowledgeBase).filter(
+        KnowledgeBase.enterprise_id == enterprise_id
+    )
+
+    if kb_id:
+        query = query.filter(Document.knowledge_base_id == kb_id)
+    if status:
+        query = query.filter(Document.status == status)
+
+    docs = query.offset(skip).limit(limit).all()
+
+    return [
+        {
+            "id": str(doc.id),
+            "knowledge_base_id": str(doc.knowledge_base_id),
+            "filename": doc.filename,
+            "file_size": doc.file_size,
+            "file_type": doc.file_type,
+            "chunk_count": doc.chunk_count,
+            "status": doc.status,
+            "error_message": doc.error_message,
+            "metadata": doc.metadata_,
+            "created_at": doc.created_at.isoformat(),
+            "updated_at": doc.updated_at.isoformat()
+        }
+        for doc in docs
+    ]
+
+
+@app.get("/api/v1/admin/documents/{doc_id}")
+async def admin_get_document(
+    doc_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取文档详情
+
+    供admin-service调用，返回指定文档的详细信息
+
+    参数:
+        doc_id: 文档ID
+
+    返回:
+        文档详情
+    """
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {
+        "id": str(doc.id),
+        "knowledge_base_id": str(doc.knowledge_base_id),
+        "filename": doc.filename,
+        "file_path": doc.file_path,
+        "file_size": doc.file_size,
+        "file_type": doc.file_type,
+        "file_hash": doc.file_hash,
+        "chunk_count": doc.chunk_count,
+        "status": doc.status,
+        "error_message": doc.error_message,
+        "metadata": doc.metadata_,
+        "created_at": doc.created_at.isoformat(),
+        "updated_at": doc.updated_at.isoformat()
+    }
+
+
 # ==================== 向量检索API ====================
 
 @app.post("/api/v1/retrieve")

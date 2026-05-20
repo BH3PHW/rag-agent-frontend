@@ -1,51 +1,69 @@
 """
-Alert Service Database Connection
+Alert-Service Service Database
+使用common.database模块
 """
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+import sys
+from pathlib import Path
 from typing import Generator
-from contextlib import contextmanager
 
-from .config import settings
+# 添加backend根目录到路径
+backend_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(backend_root))
 
+# 尝试使用common.database
+try:
+    from common.database import DatabaseManager, get_db as common_get_db, init_db as common_init_db
+    from .config import settings
+    
+    # 创建Alert-Service Service专用的数据库管理器
+    _db_manager = None
+    
+    def get_db() -> Generator:
+        """获取数据库会话"""
+        global _db_manager
+        if _db_manager is None:
+            _db_manager = DatabaseManager(
+                database_url=settings.DATABASE_URL,
+                pool_size=10,
+                max_overflow=20
+            )
+        return common_get_db(_db_manager)
+    
+    def init_db():
+        """初始化数据库"""
+        global _db_manager
+        if _db_manager is None:
+            _db_manager = DatabaseManager(
+                database_url=settings.DATABASE_URL,
+                pool_size=10,
+                max_overflow=20
+            )
+        return common_init_db(_db_manager)
 
-# Create database engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_pre_ping=True,
-    echo=settings.DEBUG
-)
-
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base class for models
-Base = declarative_base()
-
-
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-@contextmanager
-def get_db_context() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-def init_db():
-    Base.metadata.create_all(bind=engine)
+except (ImportError, AttributeError):
+    # 如果common.database不可用，使用本地实现
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker, declarative_base
+    from .config import settings
+    
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        echo=False
+    )
+    
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base = declarative_base()
+    
+    def get_db() -> Generator:
+        """获取数据库会话"""
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+    
+    def init_db():
+        """初始化数据库"""
+        Base.metadata.create_all(bind=engine)

@@ -10,7 +10,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useAppStore } from '../store';
-import { CleaningRule, CleaningJob } from '../types';
+import { CleaningRule, CleaningJob } from '@rag/api-client';
 
 export default function CleaningPage() {
   const { 

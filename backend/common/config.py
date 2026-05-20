@@ -1,5 +1,7 @@
 """
-Common utilities for RAG Customer Service System
+Common Configuration Module for RAG Customer Service System
+
+This module provides a base settings class that all services should inherit from.
 """
 import os
 from typing import Optional
@@ -7,8 +9,8 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 
-class Settings(BaseSettings):
-    """Application settings"""
+class CommonSettings(BaseSettings):
+    """Base settings class for all services"""
     
     # Application
     APP_NAME: str = "RAG Customer Service"
@@ -81,6 +83,11 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+class Settings(CommonSettings):
+    """Default settings - for backward compatibility"""
+    pass
+
+
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance"""
@@ -88,3 +95,5 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+__all__ = ["CommonSettings", "Settings", "get_settings", "settings"]

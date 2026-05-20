@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")
     
-    CHAT_SERVICE_URL: str = os.getenv("CHAT_SERVICE_URL", "http://chat-service:8003")
+    CHAT_SERVICE_URL: str = os.getenv("CHAT_SERVICE_URL", "http://chat-service:8002")
     USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://user-service:8001")
     
     # 微信配置

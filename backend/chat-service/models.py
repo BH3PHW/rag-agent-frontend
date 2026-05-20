@@ -2,20 +2,32 @@
 Chat database models
 """
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Integer
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Integer, JSON
 import uuid
 
-from .database import Base
+try:
+    from .database import Base
+except ImportError:
+    from database import Base
+
+
+def uuid_column():
+    """兼容SQLite和PostgreSQL的UUID列"""
+    return Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+
+def uuid_fk_column():
+    """兼容SQLite和PostgreSQL的UUID外键列"""
+    return Column(String(36), nullable=False)
 
 
 class ChatSession(Base):
     """Chat session model"""
     __tablename__ = "chat_sessions"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    enterprise_id = Column(UUID(as_uuid=True), ForeignKey("enterprises.id"), nullable=False)
+    id = uuid_column()
+    user_id = uuid_fk_column()
+    enterprise_id = uuid_fk_column()
     title = Column(String(200))
     is_active = Column(Boolean, default=True)
     message_count = Column(Integer, default=0)
@@ -30,16 +42,16 @@ class ChatMessage(Base):
     """Chat message model"""
     __tablename__ = "chat_messages"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    id = uuid_column()
+    session_id = uuid_fk_column()
+    user_id = Column(String(36), nullable=True)
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
-    sources = Column(JSONB, default=[])
+    sources = Column(JSON, default=[])
     is_sensitive = Column(Boolean, default=False)
     requires_human = Column(Boolean, default=False)
     tokens_used = Column(Integer, default=0)
-    metadata_ = Column("metadata", JSONB, default={})
+    metadata_ = Column("metadata", JSON, default={})
     created_at = Column(DateTime, default=datetime.utcnow)
     
     def __repr__(self):

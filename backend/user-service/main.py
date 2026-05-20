@@ -15,7 +15,7 @@ User Service - 用户与企业管理系统
 """
 
 # FastAPI核心框架
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 # 密码哈希工具
 from passlib.context import CryptContext
 # JWT认证
@@ -37,6 +37,13 @@ from .config import settings
 from .database import get_db, init_db
 # 导入Redis客户端
 from .redis_client import redis_manager
+
+# 导入角色管理路由
+from .role_endpoints import router as role_router
+
+# 注册角色管理路由
+app.include_router(role_router)
+
 # 导入数据模型
 from .models import User, Enterprise, SensitiveSettings, SemanticRule
 
@@ -340,6 +347,91 @@ async def login(credentials: UserLogin, db: Session = Depends(get_db)):
     )
 
 
+@app.post("/api/v1/auth/logout")
+async def logout():
+    """
+    用户登出
+
+    清除认证状态（Token在客户端清除）
+
+    返回:
+        成功消息
+    """
+    return {"message": "Logout successful"}
+
+
+@app.get("/api/v1/auth/me")
+async def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    获取当前用户信息
+
+    从请求头中获取Token，解析并返回当前用户信息
+
+    参数:
+        request: HTTP请求对象
+        db: 数据库会话
+
+    返回:
+        当前用户信息
+
+    异常:
+        HTTPException 401: 未认证或Token无效
+    """
+    # 从请求头获取Authorization
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+
+    # 提取Token
+    token = auth_header.split(" ")[1]
+
+    # 验证Token
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+
+    # 从Token获取用户ID
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload"
+        )
+
+    # 查询用户信息
+    user = db.query(User).filter(User.id == UUID(user_id)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
+    # 检查用户是否激活
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is inactive"
+        )
+
+    return {
+        "user_id": str(user.id),
+        "user_name": user.username,
+        "user_email": user.email,
+        "user_role": user.role,
+        "enterprise_id": str(user.enterprise_id) if user.enterprise_id else None,
+        "created_at": user.created_at.isoformat() if user.created_at else None
+    }
+
+
 @app.get("/api/v1/users/{user_id}")
 async def get_user(user_id: UUID, db: Session = Depends(get_db)):
     """
@@ -431,6 +523,72 @@ async def get_enterprise(enterprise_id: UUID, db: Session = Depends(get_db)):
         "qwen_model": enterprise.qwen_model,
         "created_at": enterprise.created_at.isoformat() if enterprise.created_at else None
     }
+
+
+@app.put("/api/v1/enterprises/{enterprise_id}")
+async def update_enterprise(
+    enterprise_id: UUID,
+    data: EnterpriseCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    更新企业信息
+
+    更新指定企业的名称等信息
+
+    参数:
+        enterprise_id: 企业ID
+        data: 更新的企业信息（名称）
+        db: 数据库会话
+
+    返回:
+        更新后的企业信息
+
+    异常:
+        HTTPException 404: 企业不存在
+    """
+    enterprise = db.query(Enterprise).filter(Enterprise.id == enterprise_id).first()
+    if not enterprise:
+        raise HTTPException(status_code=404, detail="Enterprise not found")
+
+    enterprise.name = data.name
+    db.commit()
+    db.refresh(enterprise)
+
+    return {
+        "id": str(enterprise.id),
+        "name": enterprise.name,
+        "api_key": enterprise.api_key,
+        "qwen_model": enterprise.qwen_model,
+        "created_at": enterprise.created_at.isoformat() if enterprise.created_at else None
+    }
+
+
+@app.delete("/api/v1/enterprises/{enterprise_id}")
+async def delete_enterprise(enterprise_id: UUID, db: Session = Depends(get_db)):
+    """
+    删除企业
+
+    删除指定的企业及其关联数据
+
+    参数:
+        enterprise_id: 企业ID
+        db: 数据库会话
+
+    返回:
+        删除成功消息
+
+    异常:
+        HTTPException 404: 企业不存在
+    """
+    enterprise = db.query(Enterprise).filter(Enterprise.id == enterprise_id).first()
+    if not enterprise:
+        raise HTTPException(status_code=404, detail="Enterprise not found")
+
+    db.delete(enterprise)
+    db.commit()
+
+    return {"message": "Enterprise deleted successfully"}
 
 
 # ==================== 敏感词设置端点 ====================

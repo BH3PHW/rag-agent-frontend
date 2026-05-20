@@ -3,7 +3,7 @@ import { Send, Bot, User, Trash2, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useAppStore } from '../store';
 import { api } from '../api/client';
-import type { Message, Source } from '../types';
+import type { Message, Source } from '@rag/api-client';
 
 export default function Chat() {
   const { 

@@ -1,4 +1,4 @@
-import type { SemanticRule, SensitiveSettings } from '../types';
+import type { SemanticRule, SensitiveSettings } from '@rag/api-client';
 
 interface ApiResponse<T> {
   data?: T;
@@ -11,6 +11,7 @@ export interface User {
   email: string;
   role: string;
   createdAt?: string;
+  enterpriseId?: string;
 }
 
 export interface LoginRequest {
@@ -24,20 +25,79 @@ export interface RegisterRequest {
   password: string;
 }
 
+export interface Enterprise {
+  id: string;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+  userCount?: number;
+  documentCount?: number;
+  sessionCount?: number;
+}
+
 export interface KnowledgeBase {
   id: string;
   name: string;
   description?: string;
   documents?: unknown[];
+  documentCount?: number;
+  enterpriseId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Document {
   id: string;
   filename: string;
   status: string;
+  createdAt?: string;
+  fileSize?: number;
+  knowledgeBaseId?: string;
+  enterpriseId?: string;
 }
 
-const DEFAULT_BASE_URL = 'http://localhost:8080';
+export interface ChatSession {
+  id: string;
+  userId: string;
+  enterpriseId?: string;
+  createdAt: string;
+  messageCount?: number;
+  title?: string;
+}
+
+export interface Alert {
+  id: string;
+  type: 'security' | 'system' | 'usage';
+  level: 'info' | 'warning' | 'critical';
+  message: string;
+  status: 'active' | 'acknowledged' | 'resolved';
+  createdAt: string;
+  acknowledgedAt?: string;
+  resolvedAt?: string;
+  acknowledgedBy?: string;
+  resolvedBy?: string;
+  enterpriseId?: string;
+}
+
+export interface AnalyticsStats {
+  totalSessions: number;
+  totalMessages: number;
+  totalUsers: number;
+  totalDocuments: number;
+  dailyActivity: Array<{ date: string; sessions: number; messages: number }>;
+  topEnterprises?: Array<{ name: string; sessions: number; users: number }>;
+  modelUsage?: Array<{ model: string; count: number }>;
+}
+
+export interface ServiceStatus {
+  name: string;
+  status: 'healthy' | 'degraded' | 'down';
+  uptime: string;
+  version: string;
+  lastUpdate: string;
+}
+
+const DEFAULT_BASE_URL = 'http://localhost:8000';
 let authToken: string | null = null;
 
 const getBaseUrl = (): string => {
@@ -54,6 +114,25 @@ const getBaseUrl = (): string => {
   return DEFAULT_BASE_URL;
 };
 
+interface EcommercePlatform {
+  platform_id: string;
+  name: string;
+  icon: string;
+  enabled: boolean;
+  has_config: boolean;
+  api_config: Record<string, string>;
+  sync_config: Record<string, string>;
+}
+
+interface EcommerceTool {
+  tool_name: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  config: Record<string, any>;
+}
+
 interface ApiClient {
   setToken: (token: string | null) => void;
   getToken: () => string | null;
@@ -65,6 +144,31 @@ interface ApiClient {
     logout: () => Promise<ApiResponse<void>>;
     getCurrentUser: () => Promise<ApiResponse<User>>;
   };
+  ecommerce: {
+    getPlatforms: (enterpriseId: string) => Promise<ApiResponse<EcommercePlatform[]>>;
+    updatePlatform: (
+      platformId: string,
+      enterpriseId: string,
+      enabled: boolean,
+      apiConfig?: Record<string, string>,
+      syncConfig?: Record<string, string>
+    ) => Promise<ApiResponse<{ platform_id: string; enabled: boolean }>>;
+    getTools: (enterpriseId: string) => Promise<ApiResponse<EcommerceTool[]>>;
+    updateTool: (
+      toolName: string,
+      enterpriseId: string,
+      enabled: boolean,
+      config?: Record<string, any>
+    ) => Promise<ApiResponse<{ tool_name: string; enabled: boolean }>>;
+    getPlatformRegistry: () => Promise<ApiResponse<EcommercePlatform[]>>;
+    addPlatform: (
+      platformId: string,
+      name: string,
+      icon: string,
+      apiType: string,
+      configSchema?: Record<string, any>
+    ) => Promise<ApiResponse<{ platform_id: string; name: string; icon: string }>>;
+  };
   chat: {
     send: (message: string, enterpriseId?: string) => Promise<ApiResponse<{ content: string; sources?: unknown[] }>>;
     sendSSE: (
@@ -74,6 +178,8 @@ interface ApiClient {
       onEnd: () => void,
       onError: (error: string) => void
     ) => Promise<void>;
+    getSessions: (enterpriseId?: string, userId?: string) => Promise<ApiResponse<{ sessions: ChatSession[] }>>;
+    deleteSession: (sessionId: string, userId?: string) => Promise<ApiResponse<void>>;
   };
   documents: {
     list: () => Promise<ApiResponse<{ documents: Document[] }>>;
@@ -95,7 +201,34 @@ interface ApiClient {
   };
   enterprises: {
     create: (name: string) => Promise<ApiResponse<{ id: string }>>;
-    get: (id: string) => Promise<ApiResponse<unknown>>;
+    get: (id: string) => Promise<ApiResponse<Enterprise>>;
+    list: () => Promise<ApiResponse<{ enterprises: Enterprise[] }>>;
+    update: (id: string, data: Partial<Enterprise>) => Promise<ApiResponse<Enterprise>>;
+    delete: (id: string) => Promise<ApiResponse<void>>;
+    getStats: (id: string) => Promise<ApiResponse<{ userCount: number; documentCount: number; sessionCount: number }>>;
+  };
+  admin: {
+    users: {
+      list: (enterpriseId?: string) => Promise<ApiResponse<{ users: User[] }>>;
+      get: (userId: string) => Promise<ApiResponse<User>>;
+      create: (data: Omit<User, 'id'>) => Promise<ApiResponse<User>>;
+      update: (userId: string, data: Partial<User>) => Promise<ApiResponse<User>>;
+      delete: (userId: string) => Promise<ApiResponse<void>>;
+    };
+    alerts: {
+      list: (status?: string, level?: string, enterpriseId?: string) => Promise<ApiResponse<{ alerts: Alert[] }>>;
+      get: (alertId: string) => Promise<ApiResponse<Alert>>;
+      acknowledge: (alertId: string) => Promise<ApiResponse<void>>;
+      resolve: (alertId: string) => Promise<ApiResponse<void>>;
+      delete: (alertId: string) => Promise<ApiResponse<void>>;
+    };
+    analytics: {
+      getStats: (enterpriseId?: string) => Promise<ApiResponse<AnalyticsStats>>;
+      getEnterpriseStats: (enterpriseId: string) => Promise<ApiResponse<AnalyticsStats>>;
+    };
+    services: {
+      list: () => Promise<ApiResponse<{ services: ServiceStatus[] }>>;
+    };
   };
 }
 
@@ -140,6 +273,92 @@ export const api: ApiClient = {
   getBaseUrl,
 
   request: createApiRequest,
+
+  ecommerce: {
+    getPlatforms: async (enterpriseId: string) => {
+      return createApiRequest<EcommercePlatform[]>(
+        `/api/v1/ecommerce/platforms?enterprise_id=${enterpriseId}`
+      );
+    },
+
+    updatePlatform: async (
+      platformId: string,
+      enterpriseId: string,
+      enabled: boolean,
+      apiConfig?: Record<string, string>,
+      syncConfig?: Record<string, string>
+    ) => {
+      return createApiRequest<{ platform_id: string; enabled: boolean }>(
+        `/api/v1/ecommerce/platforms/${platformId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            enterprise_id: enterpriseId,
+            enabled,
+            api_config: apiConfig,
+            sync_config: syncConfig,
+          }),
+        }
+      );
+    },
+
+    getTools: async (enterpriseId: string) => {
+      return createApiRequest<EcommerceTool[]>(
+        `/api/v1/ecommerce/tools?enterprise_id=${enterpriseId}`
+      );
+    },
+
+    updateTool: async (
+      toolName: string,
+      enterpriseId: string,
+      enabled: boolean,
+      config?: Record<string, any>
+    ) => {
+      return createApiRequest<{ tool_name: string; enabled: boolean }>(
+        `/api/v1/ecommerce/tools/${toolName}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            enterprise_id: enterpriseId,
+            enabled,
+            config,
+          }),
+        }
+      );
+    },
+
+    getPlatformRegistry: async () => {
+      return createApiRequest<EcommercePlatform[]>(
+        `/api/v1/ecommerce/registry/platforms`
+      );
+    },
+
+    addPlatform: async (
+      platformId: string,
+      name: string,
+      icon: string,
+      apiType: string,
+      configSchema?: Record<string, any>
+    ) => {
+      const params = new URLSearchParams({
+        platform_id: platformId,
+        name: name,
+        icon: icon,
+        api_type: apiType
+      });
+      
+      let url = `/api/v1/ecommerce/registry/platforms?${params}`;
+      
+      return createApiRequest<{ platform_id: string; name: string; icon: string }>(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: configSchema ? JSON.stringify({ config_schema: configSchema }) : undefined
+        }
+      );
+    },
+  },
 
   auth: {
     login: async (data: LoginRequest) => {
@@ -238,6 +457,15 @@ export const api: ApiClient = {
       } catch (error) {
         onError(error instanceof Error ? error.message : 'Stream error');
       }
+    },
+
+    getSessions: async (enterpriseId?: string, userId?: string) => {
+      const params = new URLSearchParams();
+      if (enterpriseId) params.append('enterprise_id', enterpriseId);
+      if (userId) params.append('user_id', userId);
+      return createApiRequest<{ sessions: ChatSession[] }>(
+        `/api/v1/chat/sessions${params.toString() ? `?${params.toString()}` : ''}`
+      );
     },
 
     deleteSession: async (sessionId: string, userId?: string) => {
@@ -375,7 +603,114 @@ export const api: ApiClient = {
     },
 
     get: async (id: string) => {
-      return createApiRequest<unknown>(`/api/v1/enterprises/${id}`);
+      return createApiRequest<Enterprise>(`/api/v1/enterprises/${id}`);
+    },
+
+    list: async () => {
+      return createApiRequest<{ enterprises: Enterprise[] }>('/api/v1/enterprises');
+    },
+
+    update: async (id: string, data: Partial<Enterprise>) => {
+      return createApiRequest<Enterprise>(`/api/v1/enterprises/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+
+    delete: async (id: string) => {
+      return createApiRequest<void>(`/api/v1/enterprises/${id}`, {
+        method: 'DELETE',
+      });
+    },
+
+    getStats: async (id: string) => {
+      return createApiRequest<{ userCount: number; documentCount: number; sessionCount: number }>(
+        `/api/v1/enterprises/${id}/stats`
+      );
+    },
+  },
+
+  admin: {
+    users: {
+      list: async (enterpriseId?: string) => {
+        const params = enterpriseId ? `?enterprise_id=${enterpriseId}` : '';
+        return createApiRequest<{ users: User[] }>(`/api/v1/admin/users${params}`);
+      },
+
+      get: async (userId: string) => {
+        return createApiRequest<User>(`/api/v1/admin/users/${userId}`);
+      },
+
+      create: async (data: Omit<User, 'id'>) => {
+        return createApiRequest<User>('/api/v1/admin/users', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+      },
+
+      update: async (userId: string, data: Partial<User>) => {
+        return createApiRequest<User>(`/api/v1/admin/users/${userId}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+      },
+
+      delete: async (userId: string) => {
+        return createApiRequest<void>(`/api/v1/admin/users/${userId}`, {
+          method: 'DELETE',
+        });
+      },
+    },
+
+    alerts: {
+      list: async (status?: string, level?: string, enterpriseId?: string) => {
+        const params = new URLSearchParams();
+        if (status) params.append('status', status);
+        if (level) params.append('level', level);
+        if (enterpriseId) params.append('enterprise_id', enterpriseId);
+        return createApiRequest<{ alerts: Alert[] }>(
+          `/api/v1/admin/alerts${params.toString() ? `?${params.toString()}` : ''}`
+        );
+      },
+
+      get: async (alertId: string) => {
+        return createApiRequest<Alert>(`/api/v1/admin/alerts/${alertId}`);
+      },
+
+      acknowledge: async (alertId: string) => {
+        return createApiRequest<void>(`/api/v1/admin/alerts/${alertId}/acknowledge`, {
+          method: 'POST',
+        });
+      },
+
+      resolve: async (alertId: string) => {
+        return createApiRequest<void>(`/api/v1/admin/alerts/${alertId}/resolve`, {
+          method: 'POST',
+        });
+      },
+
+      delete: async (alertId: string) => {
+        return createApiRequest<void>(`/api/v1/admin/alerts/${alertId}`, {
+          method: 'DELETE',
+        });
+      },
+    },
+
+    analytics: {
+      getStats: async (enterpriseId?: string) => {
+        const params = enterpriseId ? `?enterprise_id=${enterpriseId}` : '';
+        return createApiRequest<AnalyticsStats>(`/api/v1/admin/analytics${params}`);
+      },
+
+      getEnterpriseStats: async (enterpriseId: string) => {
+        return createApiRequest<AnalyticsStats>(`/api/v1/admin/analytics?enterprise_id=${enterpriseId}`);
+      },
+    },
+
+    services: {
+      list: async () => {
+        return createApiRequest<{ services: ServiceStatus[] }>('/api/v1/admin/services');
+      },
     },
   },
 };

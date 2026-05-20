@@ -481,6 +481,399 @@ async def get_archive(
     }
 
 
+# ============ 管理员API端点 ============
+
+@app.get("/api/v1/admin/feedback")
+async def admin_list_feedback(
+    enterprise_id: UUID,
+    rating: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取反馈列表
+
+    供admin-service调用，返回指定企业的所有反馈
+
+    参数:
+        enterprise_id: 企业ID
+        rating: 筛选反馈类型（可选）
+        start_date: 开始日期（可选）
+        end_date: 结束日期（可选）
+        skip: 跳过记录数
+        limit: 返回数量限制
+
+    返回:
+        反馈列表
+    """
+    query = db.query(MessageFeedback).filter(MessageFeedback.enterprise_id == enterprise_id)
+
+    if rating:
+        query = query.filter(MessageFeedback.rating == rating)
+    if start_date:
+        query = query.filter(MessageFeedback.created_at >= start_date)
+    if end_date:
+        query = query.filter(MessageFeedback.created_at <= end_date)
+
+    feedbacks = query.order_by(MessageFeedback.created_at.desc()).offset(skip).limit(limit).all()
+
+    return [
+        {
+            "id": str(f.id),
+            "message_id": str(f.message_id),
+            "session_id": str(f.session_id),
+            "user_id": str(f.user_id),
+            "rating": f.rating,
+            "reason": f.reason,
+            "created_at": f.created_at.isoformat()
+        }
+        for f in feedbacks
+    ]
+
+
+@app.get("/api/v1/admin/query-logs")
+async def admin_list_query_logs(
+    enterprise_id: UUID,
+    response_type: Optional[str] = None,
+    is_miss: Optional[bool] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取查询日志
+
+    供admin-service调用，返回指定企业的查询日志
+
+    参数:
+        enterprise_id: 企业ID
+        response_type: 响应类型筛选（可选）
+        is_miss: 是否未命中筛选（可选）
+        start_date: 开始日期（可选）
+        end_date: 结束日期（可选）
+        skip: 跳过记录数
+        limit: 返回数量限制
+
+    返回:
+        查询日志列表
+    """
+    query = db.query(QueryLog).filter(QueryLog.enterprise_id == enterprise_id)
+
+    if response_type:
+        query = query.filter(QueryLog.response_type == response_type)
+    if is_miss is not None:
+        query = query.filter(QueryLog.is_miss == is_miss)
+    if start_date:
+        query = query.filter(QueryLog.created_at >= start_date)
+    if end_date:
+        query = query.filter(QueryLog.created_at <= end_date)
+
+    logs = query.order_by(QueryLog.created_at.desc()).offset(skip).limit(limit).all()
+
+    return [
+        {
+            "id": str(log.id),
+            "session_id": str(log.session_id) if log.session_id else None,
+            "user_id": str(log.user_id),
+            "query": log.query,
+            "response_type": log.response_type,
+            "retrieval_score": log.retrieval_score,
+            "is_miss": log.is_miss,
+            "tokens_used": log.tokens_used,
+            "response_time_ms": log.response_time_ms,
+            "created_at": log.created_at.isoformat()
+        }
+        for log in logs
+    ]
+
+
+@app.get("/api/v1/admin/hot-queries")
+async def admin_get_hot_queries(
+    enterprise_id: UUID,
+    limit: int = Query(default=10, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取热词统计
+
+    供admin-service调用，返回指定企业的热词统计
+
+    参数:
+        enterprise_id: 企业ID
+        limit: 返回数量限制
+
+    返回:
+        热词列表
+    """
+    hot_queries = db.query(HotQuery).filter(
+        HotQuery.enterprise_id == enterprise_id
+    ).order_by(desc('frequency')).limit(limit).all()
+
+    return [
+        {
+            "id": str(hq.id),
+            "query_text": hq.query_text,
+            "frequency": hq.frequency,
+            "avg_score": round(hq.avg_retrieval_score, 3) if hq.avg_retrieval_score else None,
+            "miss_rate": round(hq.miss_rate * 100, 2) if hq.miss_rate else 0,
+            "last_seen_at": hq.last_seen_at.isoformat()
+        }
+        for hq in hot_queries
+    ]
+
+
+@app.get("/api/v1/admin/missed-queries")
+async def admin_list_missed_queries(
+    enterprise_id: UUID,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取未命中问题列表
+
+    供admin-service调用，返回指定企业的未命中问题
+
+    参数:
+        enterprise_id: 企业ID
+        status: 状态筛选（可选）
+        skip: 跳过记录数
+        limit: 返回数量限制
+
+    返回:
+        未命中问题列表
+    """
+    query = db.query(MissedQuery).filter(MissedQuery.enterprise_id == enterprise_id)
+
+    if status:
+        query = query.filter(MissedQuery.status == status)
+
+    missed = query.order_by(MissedQuery.created_at.desc()).offset(skip).limit(limit).all()
+
+    return [
+        {
+            "id": str(m.id),
+            "query": m.query,
+            "session_id": str(m.session_id) if m.session_id else None,
+            "user_id": str(m.user_id),
+            "retrieval_score": m.retrieval_score,
+            "status": m.status,
+            "suggested_answer": m.suggested_answer,
+            "resolution_notes": m.resolution_notes,
+            "resolved_by": str(m.resolved_by) if m.resolved_by else None,
+            "resolved_at": m.resolved_at.isoformat() if m.resolved_at else None,
+            "created_at": m.created_at.isoformat()
+        }
+        for m in missed
+    ]
+
+
+@app.get("/api/v1/admin/dashboard")
+async def admin_get_dashboard_stats(
+    enterprise_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取仪表盘统计数据
+
+    供admin-service调用，返回指定企业的综合统计数据
+
+    参数:
+        enterprise_id: 企业ID
+
+    返回:
+        仪表盘统计数据
+    """
+    today = datetime.utcnow().date()
+    week_ago = datetime.utcnow() - timedelta(days=7)
+
+    total_queries = db.query(func.count(QueryLog.id)).filter(
+        QueryLog.enterprise_id == enterprise_id
+    ).scalar() or 0
+
+    week_queries = db.query(func.count(QueryLog.id)).filter(
+        QueryLog.enterprise_id == enterprise_id,
+        QueryLog.created_at >= week_ago
+    ).scalar() or 0
+
+    miss_count = db.query(func.count(QueryLog.id)).filter(
+        QueryLog.enterprise_id == enterprise_id,
+        QueryLog.is_miss == True
+    ).scalar() or 0
+
+    avg_score = db.query(func.avg(QueryLog.retrieval_score)).filter(
+        QueryLog.enterprise_id == enterprise_id,
+        QueryLog.retrieval_score.isnot(None)
+    ).scalar()
+
+    avg_response_time = db.query(func.avg(QueryLog.response_time_ms)).filter(
+        QueryLog.enterprise_id == enterprise_id,
+        QueryLog.response_time_ms.isnot(None)
+    ).scalar()
+
+    total_tokens = db.query(func.sum(QueryLog.tokens_used)).filter(
+        QueryLog.enterprise_id == enterprise_id
+    ).scalar() or 0
+
+    positive_count = db.query(func.count(MessageFeedback.id)).filter(
+        MessageFeedback.enterprise_id == enterprise_id,
+        MessageFeedback.rating == "thumbs_up"
+    ).scalar() or 0
+
+    total_feedback = db.query(func.count(MessageFeedback.id)).filter(
+        MessageFeedback.enterprise_id == enterprise_id
+    ).scalar() or 0
+
+    pending_missed = db.query(func.count(MissedQuery.id)).filter(
+        MissedQuery.enterprise_id == enterprise_id,
+        MissedQuery.status == "pending"
+    ).scalar() or 0
+
+    response_type_dist = db.query(
+        QueryLog.response_type,
+        func.count(QueryLog.id).label('count')
+    ).filter(
+        QueryLog.enterprise_id == enterprise_id
+    ).group_by(QueryLog.response_type).all()
+
+    return {
+        "total_queries": total_queries,
+        "queries_this_week": week_queries,
+        "miss_count": miss_count,
+        "miss_rate": round(miss_count / total_queries * 100, 2) if total_queries > 0 else 0,
+        "avg_retrieval_score": round(avg_score, 3) if avg_score else None,
+        "avg_response_time_ms": round(avg_response_time) if avg_response_time else None,
+        "total_tokens": total_tokens,
+        "positive_rate": round(positive_count / total_feedback * 100, 2) if total_feedback > 0 else 0,
+        "pending_missed_queries": pending_missed,
+        "response_type_distribution": {rt: count for rt, count in response_type_dist}
+    }
+
+
+@app.get("/api/v1/admin/stats/overview")
+async def admin_get_overview(
+    enterprise_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取概览数据
+
+    供admin-service调用，返回用于概览页面的核心数据
+
+    参数:
+        enterprise_id: 企业ID
+
+    返回:
+        概览数据
+    """
+    total_queries = db.query(func.count(QueryLog.id)).filter(
+        QueryLog.enterprise_id == enterprise_id
+    ).scalar() or 0
+
+    positive_count = db.query(func.count(MessageFeedback.id)).filter(
+        MessageFeedback.enterprise_id == enterprise_id,
+        MessageFeedback.rating == "thumbs_up"
+    ).scalar() or 0
+
+    total_feedback = db.query(func.count(MessageFeedback.id)).filter(
+        MessageFeedback.enterprise_id == enterprise_id
+    ).scalar() or 0
+
+    pending_missed = db.query(func.count(MissedQuery.id)).filter(
+        MissedQuery.enterprise_id == enterprise_id,
+        MissedQuery.status == "pending"
+    ).scalar() or 0
+
+    return {
+        "total_queries": total_queries,
+        "positive_rate": round(positive_count / total_feedback * 100, 2) if total_feedback > 0 else 0,
+        "pending_alerts": pending_missed
+    }
+
+
+@app.get("/api/v1/admin/stats/realtime")
+async def admin_get_realtime_stats(
+    enterprise_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取实时统计
+
+    供admin-service调用，返回近期的实时统计数据
+
+    参数:
+        enterprise_id: 企业ID
+
+    返回:
+        实时统计数据
+    """
+    now = datetime.utcnow()
+    hour_ago = now - timedelta(hours=1)
+    day_ago = now - timedelta(days=1)
+
+    queries_last_hour = db.query(func.count(QueryLog.id)).filter(
+        QueryLog.enterprise_id == enterprise_id,
+        QueryLog.created_at >= hour_ago
+    ).scalar() or 0
+
+    queries_today = db.query(func.count(QueryLog.id)).filter(
+        QueryLog.enterprise_id == enterprise_id,
+        QueryLog.created_at >= day_ago
+    ).scalar() or 0
+
+    return {
+        "queries_last_hour": queries_last_hour,
+        "queries_today": queries_today,
+        "timestamp": now.isoformat()
+    }
+
+
+@app.get("/api/v1/admin/stats/performance")
+async def admin_get_performance_metrics(
+    enterprise_id: UUID,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    管理员获取性能指标
+
+    供admin-service调用，返回性能相关指标
+
+    参数:
+        enterprise_id: 企业ID
+        start_date: 开始日期（可选）
+        end_date: 结束日期（可选）
+
+    返回:
+        性能指标
+    """
+    query = db.query(QueryLog).filter(QueryLog.enterprise_id == enterprise_id)
+
+    if start_date:
+        query = query.filter(QueryLog.created_at >= start_date)
+    if end_date:
+        query = query.filter(QueryLog.created_at <= end_date)
+
+    total = query.count()
+    avg_score = query.with_entities(func.avg(QueryLog.retrieval_score)).scalar()
+    avg_response_time = query.with_entities(func.avg(QueryLog.response_time_ms)).scalar()
+    total_tokens = query.with_entities(func.sum(QueryLog.tokens_used)).scalar()
+
+    return {
+        "total_queries": total,
+        "avg_retrieval_score": round(avg_score, 3) if avg_score else None,
+        "avg_response_time_ms": round(avg_response_time) if avg_response_time else None,
+        "total_tokens": total_tokens or 0
+    }
+
+
 # ============ 仪表盘统计 ============
 
 @app.get("/api/v1/dashboard")

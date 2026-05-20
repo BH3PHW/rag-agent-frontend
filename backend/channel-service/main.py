@@ -16,8 +16,10 @@ from .redis_client import get_redis, close_redis
 from .models import (
     ChannelConfig, 
     EnterpriseChannelAccount,
-    ChannelAccessLog
+    ChannelAccessLog,
+    EcommercePlatformConfig
 )
+from .ecommerce_service import EcommercePlatformService
 from .protocols import (
     UnifiedMessage, PlatformMessage,
     PlatformType, MessageDirection
@@ -937,6 +939,230 @@ async def get_supported_platforms():
     return {
         "platforms": platforms_config
     }
+
+
+# ========== 电商平台管理 API ==========
+
+@app.get("/api/v1/ecommerce/{enterprise_id}/platforms")
+async def list_ecommerce_platforms(
+    enterprise_id: str,
+    db: Session = Depends(get_db)
+):
+    """列出企业的所有电商平台配置"""
+    service = EcommercePlatformService(db)
+    platforms = service.list_platforms(enterprise_id)
+    return {
+        "total": len(platforms),
+        "platforms": [
+            {
+                "id": p.id,
+                "platform_type": p.platform_type,
+                "store_id": p.store_id,
+                "store_name": p.store_name,
+                "is_active": p.is_active,
+                "sync_orders": p.sync_orders,
+                "sync_products": p.sync_products,
+                "auto_reply": p.auto_reply,
+                "created_at": p.created_at.isoformat(),
+                "updated_at": p.updated_at.isoformat()
+            }
+            for p in platforms
+        ]
+    }
+
+
+@app.get("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}")
+async def get_ecommerce_platform(
+    enterprise_id: str,
+    platform_id: str,
+    db: Session = Depends(get_db)
+):
+    """获取单个电商平台配置详情"""
+    service = EcommercePlatformService(db)
+    platform = service.get_platform(enterprise_id, platform_id)
+    if not platform:
+        raise HTTPException(status_code=404, detail="Ecommerce platform not found")
+    return {
+        "id": platform.id,
+        "platform_type": platform.platform_type,
+        "store_id": platform.store_id,
+        "store_name": platform.store_name,
+        "app_key": platform.app_key,
+        "app_secret": "***" if platform.app_secret else None,
+        "access_token": "***" if platform.access_token else None,
+        "refresh_token": "***" if platform.refresh_token else None,
+        "is_active": platform.is_active,
+        "sync_orders": platform.sync_orders,
+        "sync_products": platform.sync_products,
+        "auto_reply": platform.auto_reply,
+        "extra_config": platform.extra_config,
+        "last_sync_at": platform.last_sync_at.isoformat() if platform.last_sync_at else None,
+        "created_at": platform.created_at.isoformat(),
+        "updated_at": platform.updated_at.isoformat()
+    }
+
+
+@app.post("/api/v1/ecommerce/{enterprise_id}/platforms")
+async def create_ecommerce_platform(
+    enterprise_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """创建电商平台配置"""
+    data = await request.json()
+    
+    required_fields = ["platform_type", "store_id", "store_name"]
+    for field in required_fields:
+        if field not in data:
+            raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+    
+    service = EcommercePlatformService(db)
+    platform = service.create_platform(enterprise_id, data)
+    
+    return {
+        "success": True,
+        "platform_id": platform.id
+    }
+
+
+@app.put("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}")
+async def update_ecommerce_platform(
+    enterprise_id: str,
+    platform_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """更新电商平台配置"""
+    data = await request.json()
+    
+    service = EcommercePlatformService(db)
+    platform = service.update_platform(enterprise_id, platform_id, data)
+    
+    if not platform:
+        raise HTTPException(status_code=404, detail="Ecommerce platform not found")
+    
+    return {"success": True}
+
+
+@app.delete("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}")
+async def delete_ecommerce_platform(
+    enterprise_id: str,
+    platform_id: str,
+    db: Session = Depends(get_db)
+):
+    """删除电商平台配置"""
+    service = EcommercePlatformService(db)
+    success = service.delete_platform(enterprise_id, platform_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Ecommerce platform not found")
+    
+    return {"success": True}
+
+
+@app.post("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}/test")
+async def test_ecommerce_platform_connection(
+    enterprise_id: str,
+    platform_id: str,
+    db: Session = Depends(get_db)
+):
+    """测试电商平台连接"""
+    service = EcommercePlatformService(db)
+    result = service.test_platform_connection(enterprise_id, platform_id)
+    return result
+
+
+@app.get("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}/orders")
+async def get_ecommerce_platform_orders(
+    enterprise_id: str,
+    platform_id: str,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """获取电商平台订单"""
+    service = EcommercePlatformService(db)
+    orders = service.get_platform_orders(enterprise_id, platform_id, limit)
+    return {
+        "total": len(orders),
+        "orders": orders
+    }
+
+
+@app.get("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}/products")
+async def get_ecommerce_platform_products(
+    enterprise_id: str,
+    platform_id: str,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """获取电商平台商品"""
+    service = EcommercePlatformService(db)
+    products = service.get_platform_products(enterprise_id, platform_id, limit)
+    return {
+        "total": len(products),
+        "products": products
+    }
+
+
+@app.get("/api/v1/ecommerce/available-platforms")
+async def get_available_ecommerce_platforms():
+    """获取支持的电商平台列表"""
+    service = EcommercePlatformService(None)
+    platforms = service.get_available_platforms()
+    return {"platforms": platforms}
+
+
+# ========== 电商平台 API 配置管理 ==========
+
+@app.get("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}/api-config")
+async def get_ecommerce_platform_api_config(
+    enterprise_id: str,
+    platform_id: str,
+    db: Session = Depends(get_db)
+):
+    """获取平台 API 配置"""
+    service = EcommercePlatformService(db)
+    config = service.get_platform_api_config(platform_id, enterprise_id)
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="平台配置不存在")
+    
+    return {"success": True, "api_config": config}
+
+
+@app.put("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}/api-config")
+async def update_ecommerce_platform_api_config(
+    enterprise_id: str,
+    platform_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """更新平台 API 配置"""
+    data = await request.json()
+    
+    service = EcommercePlatformService(db)
+    platform = service.update_platform_api_config(platform_id, enterprise_id, data)
+    
+    if not platform:
+        raise HTTPException(status_code=404, detail="平台配置不存在")
+    
+    return {"success": True, "message": "API 配置更新成功"}
+
+
+@app.post("/api/v1/ecommerce/{enterprise_id}/platforms/{platform_id}/api-config/reset")
+async def reset_ecommerce_platform_api_config(
+    enterprise_id: str,
+    platform_id: str,
+    db: Session = Depends(get_db)
+):
+    """重置平台 API 配置为默认值"""
+    service = EcommercePlatformService(db)
+    platform = service.reset_platform_api_config(platform_id, enterprise_id)
+    
+    if not platform:
+        raise HTTPException(status_code=404, detail="平台配置不存在")
+    
+    return {"success": True, "message": "API 配置已重置为默认值"}
 
 
 if __name__ == "__main__":

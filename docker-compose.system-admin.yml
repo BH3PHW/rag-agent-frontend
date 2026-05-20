@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  system-admin-portal:
+    build:
+      context: ./frontend/apps/system-admin-portal
+      dockerfile: Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_BASE_URL=${API_GATEWAY_URL:-http://localhost:8000}
+    networks:
+      - rag_network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+networks:
+  rag_network:
+    driver: bridge

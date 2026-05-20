@@ -2,12 +2,14 @@
 Chat Service 数据模型扩展 - 问答质量评估相关表
 """
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Integer, Float
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Float
 import uuid
 
 # 从同一模块导入 Base，与 ChatSession 和 ChatMessage 使用相同的基类
-from .models import Base
+try:
+    from .models import Base, uuid_column, uuid_fk_column
+except ImportError:
+    from models import Base, uuid_column, uuid_fk_column
 
 
 class Feedback(Base):
@@ -23,9 +25,9 @@ class Feedback(Base):
     """
     __tablename__ = "feedback"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    message_id = Column(UUID(as_uuid=True), ForeignKey("chat_messages.id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
+    id = uuid_column()
+    message_id = uuid_fk_column()
+    user_id = Column(String(36), nullable=False)
     rating = Column(String(20), nullable=False)  # "thumbs_up" | "thumbs_down"
     reason = Column(Text)  # 点踩原因，可选
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -47,9 +49,9 @@ class UnmatchedQuestion(Base):
     """
     __tablename__ = "unmatched_questions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
+    id = uuid_column()
+    session_id = uuid_fk_column()
+    user_id = Column(String(36), nullable=False)
     question = Column(Text, nullable=False)
     retrieval_score = Column(Float, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)

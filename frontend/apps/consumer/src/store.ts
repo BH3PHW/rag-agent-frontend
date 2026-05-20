@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from './api/client';
-import type { User, Message, Document, CleaningRule, CleaningJob, AppSettings } from './types';
+import type { User, Message, Document, CleaningRule, CleaningJob, AppSettings } from '@rag/api-client';
 
 interface AppState {
   activePage: 'chat' | 'documents' | 'settings' | 'users' | 'cleaning' | 'sensitive';

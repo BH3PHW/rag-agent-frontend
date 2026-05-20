@@ -195,10 +195,31 @@ services:
       dockerfile: Dockerfile
     container_name: rag-admin-service
     ports:
-      - "8080:8080"
+      - "8006:8006"
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
       - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+  # 分析服务
+  analytics-service:
+    build:
+      context: ./backend/analytics-service
+      dockerfile: Dockerfile
+    container_name: rag-analytics-service
+    ports:
+      - "8007:8007"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-postgres123}@postgres:5432/rag_db
+      - REDIS_URL=redis://redis:6379/2
+      - SECRET_KEY=your-super-secret-key-change-this-in-production
     depends_on:
       postgres:
         condition: service_healthy

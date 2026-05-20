@@ -10,9 +10,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY analytics-service ./analytics-service
+COPY . .
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-CMD ["uvicorn", "analytics-service.main:app", "--host", "0.0.0.0", "--port", "8006"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8007"]

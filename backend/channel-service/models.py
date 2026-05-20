@@ -200,3 +200,60 @@ class ChannelAccessLog(Base):
     
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
+
+class EcommercePlatformConfig(Base):
+    """电商平台配置表
+    管理企业客户的电商平台接入配置：淘宝、抖音、闲鱼、京东、拼多多、小红书
+    """
+    __tablename__ = "ecommerce_platform_configs"
+    
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    
+    enterprise_id = Column(String(128), nullable=False, index=True)
+    
+    # 平台信息
+    platform_type = Column(String(32), nullable=False, index=True, 
+                         comment="电商平台类型：taobao/douyin/xianyu/jd/pinduoduo/xiaohongshu")
+    platform_name = Column(String(128), nullable=False, comment="平台显示名称")
+    
+    # 店铺信息
+    store_id = Column(String(128), nullable=True, comment="店铺ID")
+    store_name = Column(String(128), nullable=True, comment="店铺名称")
+    
+    # API认证信息
+    app_key = Column(String(256), nullable=True, comment="App Key/API Key")
+    app_secret = Column(Text, nullable=True, comment="App Secret")
+    access_token = Column(Text, nullable=True, comment="Access Token")
+    refresh_token = Column(Text, nullable=True, comment="Refresh Token")
+    token_expires_at = Column(DateTime, nullable=True, comment="Token过期时间")
+    
+    # 状态管理
+    status = Column(String(32), nullable=False, default="draft", comment="状态：draft/active/inactive/error")
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    
+    # 业务配置
+    sync_orders = Column(Boolean, default=True, comment="是否同步订单")
+    sync_products = Column(Boolean, default=True, comment="是否同步商品")
+    auto_reply = Column(Boolean, default=True, comment="是否自动回复")
+    
+    # 自定义配置
+    extra_config = Column(JSON, nullable=True, comment="额外配置")
+    
+    # 统计信息
+    order_count = Column(Integer, default=0, comment="订单总数")
+    product_count = Column(Integer, default=0, comment="商品总数")
+    last_sync_at = Column(DateTime, nullable=True, comment="最后同步时间")
+    
+    # 备注
+    description = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        Index('idx_enterprise_platform', 'enterprise_id', 'platform_type'),
+    )
+    
+    def __repr__(self):
+        return f"<EcommercePlatformConfig {self.platform_name}({self.platform_type})>"
+
